@@ -21,8 +21,60 @@ final class EroMeVoice {
     }
 }
 
+final class EroMeKey: ObservableObject {
+    @Published private(set) var key: String = ""
+    @Published private(set) var expiry: Date?
+
+    private let keyField = "erome.key"
+    private let expiryField = "erome.keyExpiry"
+    private let defaultDays: Double = 30
+
+    init() {
+        key = UserDefaults.standard.string(forKey: keyField) ?? ""
+        if let stamp = UserDefaults.standard.object(forKey: expiryField) as? Date {
+            expiry = stamp
+        }
+    }
+
+    var isValid: Bool {
+        guard let expiry else { return false }
+        return expiry > Date()
+    }
+
+    func save(_ raw: String) {
+        let clean = raw.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
+        guard clean.count >= 8 else { return }
+        key = clean
+        expiry = Date().addingTimeInterval(defaultDays * 86_400)
+        UserDefaults.standard.set(clean, forKey: keyField)
+        UserDefaults.standard.set(expiry, forKey: expiryField)
+    }
+
+    func clear() {
+        key = ""
+        expiry = nil
+        UserDefaults.standard.removeObject(forKey: keyField)
+        UserDefaults.standard.removeObject(forKey: expiryField)
+    }
+
+    func remaining(from now: Date) -> String {
+        guard let expiry else { return "sin key" }
+        let seconds = Int(expiry.timeIntervalSince(now))
+        if seconds <= 0 { return "vencida" }
+        let d = seconds / 86_400
+        let h = (seconds % 86_400) / 3_600
+        let m = (seconds % 3_600) / 60
+        let s = seconds % 60
+        if d > 0 { return "\(d)d \(h)h \(m)m" }
+        if h > 0 { return "\(h)h \(m)m \(s)s" }
+        return "\(m)m \(s)s"
+    }
+}
+
 struct EroMeView: View {
     @StateObject private var engine = EroMeEngine()
+    @StateObject private var keyStore = EroMeKey()
+    @State private var keyInput = ""
     @State private var voiceOn = true
     @State private var showAdvanced = false
     private let voice = EroMeVoice()
@@ -33,27 +85,25 @@ struct EroMeView: View {
     private let accent = Color(red: 0.910, green: 0.376, blue: 0.557)
     private let muted = Color(red: 0.545, green: 0.545, blue: 0.588)
 
+    private var loaded: Int { EroMeOption.all.count - engine.missing.count }
+    private var activeCount: Int { engine.active.count }
+    private var locked: Bool { !keyStore.isValid }
+
     var body: some View {
         ZStack {
             bg.ignoresSafeArea()
             ScrollView {
                 VStack(spacing: 0) {
                     header
-                    Text("Free Fire · cierra el juego antes de aplicar")
-                        .font(.system(size: 11))
-                        .foregroundStyle(muted)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(.top, 8)
-                        .padding(.bottom, 14)
-
+                    keyCard
+                    patchCard
                     section("Aimbots", "al activar uno se apaga el otro")
                     ForEach(EroMeOption.all.filter { $0.kind == .aimbot }) { row($0) }
-
                     section("Hologramas", "independientes")
                         .padding(.top, 6)
                     ForEach(EroMeOption.all.filter { $0.kind == .hologram }) { row($0) }
-
                     statusBar
+                    howToCard
                     footer
                 }
                 .padding(16)
@@ -70,24 +120,130 @@ struct EroMeView: View {
     }
 
     private var header: some View {
-        HStack {
-            HStack(spacing: 7) {
+        VStack(spacing: 10) {
+            ZStack {
+                Circle()
+                    .fill(card)
+                    .frame(width: 96, height: 96)
+                    .overlay(Circle().stroke(line, lineWidth: 1))
                 Image(systemName: "heart.fill")
-                    .font(.system(size: 15))
+                    .font(.system(size: 40))
                     .foregroundStyle(accent)
-                Text("EroMe")
-                    .font(.system(size: 16, weight: .medium))
-                    .foregroundStyle(.white)
             }
-            Spacer()
-            Text("beta")
-                .font(.system(size: 11))
-                .foregroundStyle(muted)
-                .padding(.horizontal, 9)
-                .padding(.vertical, 3)
-                .background(card, in: Capsule())
-                .overlay(Capsule().stroke(line, lineWidth: 1))
+            Text("EroMe")
+                .font(.system(size: 22, weight: .medium))
+                .foregroundStyle(.white)
+            HStack(spacing: 6) {
+                Text("Free Fire")
+                    .font(.system(size: 11))
+                    .foregroundStyle(muted)
+                Text("·")
+                    .font(.system(size: 11))
+                    .foregroundStyle(line)
+                Text(activeCount > 0 ? "\(activeCount) activo\(activeCount == 1 ? "" : "s")" : "sin activar")
+                    .font(.system(size: 11))
+                    .foregroundStyle(activeCount > 0 ? accent : muted)
+            }
+            .padding(.horizontal, 11)
+            .padding(.vertical, 4)
+            .background(card, in: Capsule())
+            .overlay(Capsule().stroke(line, lineWidth: 1))
         }
+        .frame(maxWidth: .infinity)
+        .padding(.top, 14)
+        .padding(.bottom, 18)
+    }
+
+    private var keyCard: some View {
+        VStack(alignment: .leading, spacing: 9) {
+            HStack {
+                Text("Tu key")
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundStyle(.white)
+                Spacer()
+                if keyStore.isValid {
+                    TimelineView(.periodic(from: Date(), by: 1)) { context in
+                        Text(keyStore.remaining(from: context.date))
+                            .font(.system(size: 11, weight: .medium))
+                            .foregroundStyle(accent)
+                    }
+                } else {
+                    Text(keyStore.key.isEmpty ? "sin key" : "vencida")
+                        .font(.system(size: 11))
+                        .foregroundStyle(muted)
+                }
+            }
+
+            if keyStore.key.isEmpty || !keyStore.isValid {
+                TextField("EROME-XXXX-XXXX-XXXX", text: $keyInput)
+                    .font(.system(size: 12, design: .monospaced))
+                    .autocapitalization(.allCharacters)
+                    .disableAutocorrection(true)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 9)
+                    .background(bg, in: RoundedRectangle(cornerRadius: 9))
+                    .overlay(RoundedRectangle(cornerRadius: 9).stroke(line, lineWidth: 1))
+                    .foregroundStyle(.white)
+
+                Button {
+                    keyStore.save(keyInput)
+                    keyInput = ""
+                } label: {
+                    Text("Guardar key")
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundStyle(bg)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 9)
+                        .background(accent, in: RoundedRectangle(cornerRadius: 9))
+                }
+                .buttonStyle(.plain)
+            } else {
+                HStack {
+                    Text(maskedKey)
+                        .font(.system(size: 12, design: .monospaced))
+                        .foregroundStyle(muted)
+                    Spacer()
+                    Button("Cambiar") { keyStore.clear() }
+                        .font(.system(size: 11))
+                        .foregroundStyle(accent)
+                }
+            }
+        }
+        .padding(12)
+        .background(card, in: RoundedRectangle(cornerRadius: 12))
+        .overlay(RoundedRectangle(cornerRadius: 12).stroke(keyStore.isValid ? accent : line, lineWidth: 1))
+        .padding(.bottom, 12)
+    }
+
+    private var maskedKey: String {
+        let k = keyStore.key
+        guard k.count > 8 else { return k }
+        return String(k.prefix(4)) + "-••••-" + String(k.suffix(4))
+    }
+
+    private var patchCard: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Text("Parches cargados")
+                    .font(.system(size: 11))
+                    .foregroundStyle(muted)
+                Spacer()
+                Text("\(loaded) de \(EroMeOption.all.count)")
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundStyle(loaded == EroMeOption.all.count ? Color(red: 0.373, green: 0.816, blue: 0.541) : accent)
+            }
+            ProgressView(value: Double(loaded), total: Double(EroMeOption.all.count))
+                .tint(accent)
+            if loaded == 0 {
+                Text("Todavía no hay parches subidos. Los switches se activan cuando estén.")
+                    .font(.system(size: 11))
+                    .foregroundStyle(muted)
+            }
+        }
+        .padding(12)
+        .background(card, in: RoundedRectangle(cornerRadius: 12))
+        .overlay(RoundedRectangle(cornerRadius: 12).stroke(line, lineWidth: 1))
+        .padding(.bottom, 16)
     }
 
     private func section(_ title: String, _ tag: String) -> some View {
@@ -112,7 +268,7 @@ struct EroMeView: View {
             HStack(spacing: 10) {
                 Text(option.title)
                     .font(.system(size: 13))
-                    .foregroundStyle(unavailable ? muted : .white)
+                    .foregroundStyle(unavailable || locked ? muted : .white)
                 Spacer()
                 Text(working ? "···" : (on ? "on" : "off"))
                     .font(.system(size: 11, weight: .medium))
@@ -129,15 +285,15 @@ struct EroMeView: View {
             .overlay(RoundedRectangle(cornerRadius: 11).stroke(on ? accent : line, lineWidth: 1))
         }
         .buttonStyle(.plain)
-        .disabled(engine.busy != nil || unavailable)
-        .opacity(unavailable ? 0.45 : 1)
+        .disabled(engine.busy != nil || unavailable || locked)
+        .opacity(unavailable || locked ? 0.45 : 1)
         .padding(.bottom, 7)
     }
 
     private var statusBar: some View {
-        Text(statusText)
+        Text(locked ? "Introduce una key para desbloquear" : statusText)
             .font(.system(size: 12))
-            .foregroundStyle(statusColor)
+            .foregroundStyle(locked ? muted : statusColor)
             .frame(maxWidth: .infinity)
             .padding(.vertical, 8)
             .background(card, in: RoundedRectangle(cornerRadius: 10))
@@ -164,6 +320,25 @@ struct EroMeView: View {
         }
     }
 
+    private var howToCard: some View {
+        VStack(alignment: .leading, spacing: 7) {
+            Text("Cómo usar")
+                .font(.system(size: 11, weight: .medium))
+                .foregroundStyle(.white)
+            Text("1. Cierra Free Fire por completo")
+            Text("2. Activa lo que quieras aquí")
+            Text("3. Abre el juego")
+            Text("Para volver a lo normal, apaga cada opción.")
+        }
+        .font(.system(size: 11))
+        .foregroundStyle(muted)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(12)
+        .background(card, in: RoundedRectangle(cornerRadius: 12))
+        .overlay(RoundedRectangle(cornerRadius: 12).stroke(line, lineWidth: 1))
+        .padding(.top, 16)
+    }
+
     private var footer: some View {
         HStack {
             Button("Comprar o contacto") {
@@ -187,6 +362,7 @@ struct EroMeView: View {
                 .font(.system(size: 11))
                 .foregroundStyle(muted)
         }
-        .padding(.top, 11)
+        .padding(.top, 16)
+        .padding(.bottom, 8)
     }
 }
