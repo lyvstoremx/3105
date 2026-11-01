@@ -14,18 +14,19 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Normalizar icono
+      - name: Normalizar archivos
         run: |
           cd ThreeOneOSFive/Assets.xcassets/AppIcon.appiconset
           if [ -f "AppIcon-1024.png.PNG" ]; then mv "AppIcon-1024.png.PNG" "AppIcon-1024.png"; fi
           sips -z 1024 1024 "AppIcon-1024.png" >/dev/null
-          echo "icono listo"
+          cd ../../../Resources/Patches
+          rm -f .keep
+          first=$(ls *.mp3 2>/dev/null | head -n1)
+          if [ -n "$first" ]; then mv "$first" levi.mp3; fi
+          ls -la
 
       - name: Mostrar Xcode
         run: xcodebuild -version
-
-      - name: Listar proyecto
-        run: xcodebuild -list -project ThreeOneOSFive.xcodeproj
 
       - name: Compilar
         run: |
