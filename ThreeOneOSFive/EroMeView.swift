@@ -480,7 +480,7 @@ struct EroMeView: View {
                 HStack(spacing: 8) {
                     Image(systemName: "gamecontroller.fill")
                         .font(.system(size: 13))
-                    Text("Abrir Free Fire Max")
+                    Text("Abrir Free Fire")
                         .font(.system(size: 13, weight: .bold))
                 }
                 .foregroundColor(.white)
@@ -620,7 +620,7 @@ struct EroMeView: View {
     }
 
     private func openGame() {
-        for candidate in ["freefiremax://", "freefire://"] {
+        for candidate in ["freefire://", "freefiremax://"] {
             if let url = URL(string: candidate), UIApplication.shared.canOpenURL(url) {
                 UIApplication.shared.open(url)
                 return
