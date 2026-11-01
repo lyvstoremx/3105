@@ -278,10 +278,6 @@ struct EroMeView: View {
                 Text("1 dispositivo")
                     .font(.system(size: 10, weight: .semibold))
                     .foregroundColor(muted)
-
-                Text("iOS 16+")
-                    .font(.system(size: 10, weight: .semibold))
-                    .foregroundColor(muted)
             }
         }
         .padding(14)
@@ -381,6 +377,19 @@ struct EroMeView: View {
                 .foregroundColor(statusColor)
                 .multilineTextAlignment(.center)
 
+            HStack(spacing: 6) {
+                Image(systemName: "checkmark.seal.fill")
+                    .font(.system(size: 11))
+                    .foregroundColor(green.opacity(0.85))
+                Text("Compatible iOS 16.0 - 26.6")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundColor(muted)
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 7)
+            .background(Color.white.opacity(0.04))
+            .clipShape(Capsule())
+
             Button {
                 openGame()
             } label: {
@@ -400,10 +409,6 @@ struct EroMeView: View {
                 )
             }
             .buttonStyle(.plain)
-
-            Text("Manten pulsado el logo 3 segundos para Avanzado")
-                .font(.system(size: 10, weight: .medium))
-                .foregroundColor(muted.opacity(0.7))
         }
     }
 
