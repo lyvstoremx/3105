@@ -1,7 +1,7 @@
 import Foundation
 import SwiftUI
 
-enum EroMeKind { case aimbot, hologram }
+enum EroMeKind { case bypass, aimbot, hologram }
 
 struct EroMeOption: Identifiable, Hashable {
     let id: String
@@ -10,7 +10,9 @@ struct EroMeOption: Identifiable, Hashable {
     let kind: EroMeKind
 
     static let all: [EroMeOption] = [
+        .init(id: "bypass", title: "Activar bypass", resource: "fileinfo", kind: .bypass),
         .init(id: "aim_drag", title: "AimDrag", resource: "aim_drag", kind: .aimbot),
+        .init(id: "aim_drag_antena", title: "AimDrag Antena", resource: "aim_drag_antena", kind: .aimbot),
         .init(id: "aim_head", title: "Aimbot Head", resource: "aim_head", kind: .aimbot),
         .init(id: "aim_cuello", title: "Aimbot Cuello", resource: "aim_cuello", kind: .aimbot),
         .init(id: "holo_armas", title: "Holograma de armas", resource: "holo_armas", kind: .hologram),
@@ -20,6 +22,11 @@ struct EroMeOption: Identifiable, Hashable {
 
 enum EroMeLink {
     static let contact = "https://t.me/EroMExternalios"
+}
+
+enum EroMePasswords {
+    static let shared = "EroMe-815-Qz7-kR2m-572716"
+    static func value(for resource: String) -> String? { shared }
 }
 
 @MainActor
@@ -60,6 +67,7 @@ final class EroMeEngine: ObservableObject {
 
     func toggle(_ option: EroMeOption) {
         guard busy == nil else { return }
+        if option.kind == .bypass && active.contains(option.id) { return }
         if active.contains(option.id) { restore(option) } else { apply(option) }
     }
 
@@ -72,9 +80,18 @@ final class EroMeEngine: ObservableObject {
         let previous = EroMeOption.all.first {
             $0.kind == .aimbot && $0.id != option.id && active.contains($0.id)
         }
+        let bypass = EroMeOption.all.first { $0.kind == .bypass }
+        let needsBypass = option.kind != .bypass && !active.contains("bypass")
 
         Task.detached(priority: .userInitiated) {
             do {
+                if needsBypass,
+                   let bypass,
+                   let bypassProject = await self.project(for: bypass) {
+                    await MainActor.run { self.phase = .working("Activando bypass…") }
+                    _ = try DevicePatchService.apply(project: bypassProject)
+                    await MainActor.run { _ = self.active.insert(bypass.id) }
+                }
                 if let previous, let prevProject = await self.project(for: previous) {
                     await MainActor.run { self.phase = .working("Restaurando \(previous.title)…") }
                     if let receipt = DevicePatchService.latestReceipt(projectID: prevProject.id) {
@@ -134,10 +151,20 @@ final class EroMeEngine: ObservableObject {
                 withExtension: "3105",
                 subdirectory: "Patches"
               ),
-              let data = try? Data(contentsOf: url, options: .mappedIfSafe),
-              let decoded = try? PatchPackageCodec.decode(data, password: nil) else {
+              let data = try? Data(contentsOf: url, options: .mappedIfSafe) else {
             return nil
         }
+        let summary = try? PatchPackageCodec.inspect(data)
+        let decoded: DecodedPatchPackage?
+        if summary?.isPasswordProtected == true {
+            decoded = try? PatchPackageCodec.decode(
+                data,
+                password: EroMePasswords.value(for: option.resource) ?? ""
+            )
+        } else {
+            decoded = try? PatchPackageCodec.decode(data, password: nil)
+        }
+        guard let decoded else { return nil }
         cache[option.id] = decoded.project
         return decoded.project
     }
@@ -152,7 +179,7 @@ final class EroMeEngine: ObservableObject {
         case .restoreFailed: return "No se pudo restaurar"
         case .duplicateTarget: return "El parche repite una ruta"
         case .unsafeTargetPath: return "Ruta no permitida en el parche"
-        case .invalidPasswordOrCorruptedPackage: return "El parche está dañado"
+        case .invalidPasswordOrCorruptedPackage: return "El parche está dañado o la contraseña no coincide"
         case .sizeLimitExceeded: return "El parche pesa demasiado"
         case .unsupportedVersion: return "Versión de parche no soportada"
         case .symbolicLinkUnsupported: return "Enlace simbólico no soportado"
