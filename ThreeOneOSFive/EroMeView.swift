@@ -324,6 +324,15 @@ struct EroMeView: View {
 
     private var patchCard: some View {
         VStack(spacing: 10) {
+            ForEach(EroMeOption.all.filter { $0.kind == .bypass }) { option in
+                row(option)
+            }
+
+            Rectangle()
+                .fill(line)
+                .frame(height: 1)
+                .padding(.vertical, 2)
+
             ForEach(EroMeOption.all.filter { $0.kind == .aimbot }) { option in
                 row(option)
             }
@@ -347,7 +356,9 @@ struct EroMeView: View {
 
     private func tint(_ option: EroMeOption) -> Color {
         switch option.id {
+        case "bypass": return green
         case "aim_drag": return violet
+        case "aim_drag_antena": return violet
         case "aim_head": return accent
         case "aim_cuello": return blue
         case "holo_armas": return violet
@@ -358,7 +369,9 @@ struct EroMeView: View {
 
     private func symbol(_ option: EroMeOption) -> String {
         switch option.id {
+        case "bypass": return "shield.lefthalf.filled"
         case "aim_drag": return "hand.draw.fill"
+        case "aim_drag_antena": return "antenna.radiowaves.left.and.right"
         case "aim_head": return "target"
         case "aim_cuello": return "figure.arms.open"
         case "holo_armas": return "wand.and.stars"
@@ -371,6 +384,7 @@ struct EroMeView: View {
         let on = engine.active.contains(option.id)
         let working = engine.busy == option.id
         let unavailable = engine.missing.contains(option.id)
+        let locked = option.kind == .bypass && on
 
         return Button {
             engine.toggle(option)
@@ -389,7 +403,7 @@ struct EroMeView: View {
                     Text(option.title)
                         .font(.system(size: 14, weight: .semibold))
                         .foregroundColor(.white)
-                    Text(unavailable ? "sin parche" : (on ? "activo" : "apagado"))
+                    Text(unavailable ? "sin parche" : (on ? "activo" : (option.kind == .bypass ? "obligatorio" : "apagado")))
                         .font(.system(size: 10, weight: .medium))
                         .foregroundColor(muted)
                 }
@@ -398,6 +412,21 @@ struct EroMeView: View {
 
                 if working {
                     ProgressView().tint(accent)
+                } else if locked {
+                    HStack(spacing: 4) {
+                        Image(systemName: "lock.fill")
+                            .font(.system(size: 9))
+                        Text("ON")
+                            .font(.system(size: 10, weight: .bold))
+                    }
+                    .foregroundColor(green)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 6)
+                    .background(green.opacity(0.14))
+                    .clipShape(Capsule())
+                    .overlay(
+                        Capsule().stroke(green.opacity(0.35), lineWidth: 1)
+                    )
                 } else {
                     Text(on ? "ON" : "OFF")
                         .font(.system(size: 10, weight: .bold))
