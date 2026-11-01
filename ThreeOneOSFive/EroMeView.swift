@@ -110,6 +110,7 @@ struct EroMeView: View {
     private let accent = Color(red: 0.937, green: 0.298, blue: 0.541)
     private let green = Color(red: 0.373, green: 0.816, blue: 0.541)
     private let red = Color(red: 0.937, green: 0.42, blue: 0.42)
+    private let amber = Color(red: 0.949, green: 0.678, blue: 0.267)
     private let muted = Color(red: 0.545, green: 0.545, blue: 0.588)
     private let telegram = Color(red: 0.259, green: 0.62, blue: 0.882)
     private let violet = Color(red: 0.545, green: 0.361, blue: 0.965)
@@ -123,6 +124,20 @@ struct EroMeView: View {
 
     private var loaded: Int { EroMeOption.all.count - engine.missing.count }
     private var activeCount: Int { engine.active.count }
+
+    private var osVersion: (Int, Int) {
+        let v = ProcessInfo.processInfo.operatingSystemVersion
+        return (v.majorVersion, v.minorVersion)
+    }
+
+    private var osText: String { "\(osVersion.0).\(osVersion.1)" }
+
+    private var osState: Int {
+        let (major, minor) = osVersion
+        if major < 17 || major > 27 { return 2 }
+        if major == 27 && minor > 0 { return 1 }
+        return 0
+    }
 
     var body: some View {
         ZStack {
@@ -419,13 +434,12 @@ struct EroMeView: View {
             }
 
             HStack(spacing: 6) {
-                Image(systemName: "checkmark.seal.fill")
+                Image(systemName: osState == 0 ? "checkmark.seal.fill" : (osState == 1 ? "exclamationmark.triangle.fill" : "xmark.octagon.fill"))
                     .font(.system(size: 11))
-                    .foregroundColor(green.opacity(0.85))
-                Text("Compatible iOS 16.0 - 26.6")
+                Text(osLabel)
                     .font(.system(size: 11, weight: .semibold))
-                    .foregroundColor(muted)
             }
+            .foregroundColor(osState == 0 ? green.opacity(0.85) : (osState == 1 ? amber : red))
             .padding(.horizontal, 12)
             .padding(.vertical, 7)
             .background(Color.white.opacity(0.04))
@@ -472,6 +486,14 @@ struct EroMeView: View {
                 )
             }
             .buttonStyle(.plain)
+        }
+    }
+
+    private var osLabel: String {
+        switch osState {
+        case 1: return "iOS \(osText) sin verificar"
+        case 2: return "Tu iOS \(osText) no es compatible"
+        default: return "Compatible iOS 17.0 - 27.0"
         }
     }
 
