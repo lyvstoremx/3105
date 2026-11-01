@@ -1,7 +1,7 @@
 import Foundation
 import SwiftUI
 
-enum EroMeKind { case bypass, aimbot, hologram }
+enum EroMeKind { case aimbot, hologram }
 
 struct EroMeOption: Identifiable, Hashable {
     let id: String
@@ -10,11 +10,10 @@ struct EroMeOption: Identifiable, Hashable {
     let kind: EroMeKind
 
     static let all: [EroMeOption] = [
-        .init(id: "bypass", title: "Activar bypass", resource: "fileinfo", kind: .bypass),
         .init(id: "aim_drag", title: "AimDrag", resource: "aim_drag", kind: .aimbot),
         .init(id: "aim_drag_antena", title: "AimDrag Antena", resource: "aim_drag_antena", kind: .aimbot),
         .init(id: "aim_head", title: "Aimbot Head", resource: "aim_head", kind: .aimbot),
-        .init(id: "aim_cuello", title: "Aimbot Cuello", resource: "aim_cuello", kind: .aimbot),
+        .init(id: "aim_pecho", title: "Aimbot Pecho", resource: "aim_pecho", kind: .aimbot),
         .init(id: "holo_armas", title: "Holograma de armas", resource: "holo_armas", kind: .hologram),
         .init(id: "holo_personajes", title: "Holograma de personajes", resource: "holo_personaje", kind: .hologram)
     ]
@@ -67,7 +66,6 @@ final class EroMeEngine: ObservableObject {
 
     func toggle(_ option: EroMeOption) {
         guard busy == nil else { return }
-        if option.kind == .bypass && active.contains(option.id) { return }
         if active.contains(option.id) { restore(option) } else { apply(option) }
     }
 
@@ -80,18 +78,9 @@ final class EroMeEngine: ObservableObject {
         let previous = EroMeOption.all.first {
             $0.kind == .aimbot && $0.id != option.id && active.contains($0.id)
         }
-        let bypass = EroMeOption.all.first { $0.kind == .bypass }
-        let needsBypass = option.kind != .bypass && !active.contains("bypass")
 
         Task.detached(priority: .userInitiated) {
             do {
-                if needsBypass,
-                   let bypass,
-                   let bypassProject = await self.project(for: bypass) {
-                    await MainActor.run { self.phase = .working("Activando bypass…") }
-                    _ = try DevicePatchService.apply(project: bypassProject)
-                    await MainActor.run { _ = self.active.insert(bypass.id) }
-                }
                 if let previous, let prevProject = await self.project(for: previous) {
                     await MainActor.run { self.phase = .working("Restaurando \(previous.title)…") }
                     if let receipt = DevicePatchService.latestReceipt(projectID: prevProject.id) {
