@@ -16,7 +16,7 @@ struct EroMeOption: Identifiable, Hashable {
         .init(id: "aim_head", title: "Aimbot Head", resource: "aim_head", kind: .aimbot),
         .init(id: "aim_cuello", title: "Aimbot Cuello", resource: "aim_cuello", kind: .aimbot),
         .init(id: "holo_armas", title: "Holograma de armas", resource: "holo_armas", kind: .hologram),
-        .init(id: "holo_personajes", title: "Holograma de personajes", resource: "holo_personajes", kind: .hologram)
+        .init(id: "holo_personajes", title: "Holograma de personajes", resource: "holo_personaje", kind: .hologram)
     ]
 }
 
