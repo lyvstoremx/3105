@@ -60,7 +60,7 @@ struct EroMeView: View {
             }
         }
         .onAppear { engine.bootstrap() }
-        .onChange(of: engine.phase) { _, phase in
+        .onChange(of: engine.phase) { phase in
             if case .on = phase, voiceOn { voice.say("Levi activado") }
         }
         .fullScreenCover(isPresented: $showAdvanced) {
