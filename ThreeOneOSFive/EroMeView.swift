@@ -134,7 +134,7 @@ struct EroMeView: View {
 
     private var osState: Int {
         let (major, minor) = osVersion
-        if major < 17 || major > 27 { return 2 }
+        if major < 26 || major > 27 { return 2 }
         if major == 27 && minor > 0 { return 1 }
         return 0
     }
@@ -493,7 +493,7 @@ struct EroMeView: View {
         switch osState {
         case 1: return "iOS \(osText) sin verificar"
         case 2: return "Tu iOS \(osText) no es compatible"
-        default: return "Compatible iOS 17.0 - 27.0"
+        default: return "Compatible iOS 26.0 - 27.0 beta"
         }
     }
 
