@@ -111,6 +111,7 @@ struct EroMeView: View {
     private let green = Color(red: 0.373, green: 0.816, blue: 0.541)
     private let red = Color(red: 0.937, green: 0.42, blue: 0.42)
     private let muted = Color(red: 0.545, green: 0.545, blue: 0.588)
+    private let telegram = Color(red: 0.259, green: 0.62, blue: 0.882)
 
     private var valid: Bool {
         guard let expiry else { return false }
@@ -279,6 +280,29 @@ struct EroMeView: View {
                     .font(.system(size: 10, weight: .semibold))
                     .foregroundColor(muted)
             }
+
+            if !valid {
+                Button {
+                    openContact()
+                } label: {
+                    HStack(spacing: 6) {
+                        Image(systemName: "paperplane.fill")
+                            .font(.system(size: 11))
+                        Text("Comprar una key")
+                            .font(.system(size: 11, weight: .bold))
+                    }
+                    .foregroundColor(telegram)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 10)
+                    .background(telegram.opacity(0.12))
+                    .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 10, style: .continuous)
+                            .stroke(telegram.opacity(0.3), lineWidth: 1)
+                    )
+                }
+                .buttonStyle(.plain)
+            }
         }
         .padding(14)
         .background(card)
@@ -409,6 +433,27 @@ struct EroMeView: View {
                 )
             }
             .buttonStyle(.plain)
+
+            Button {
+                openContact()
+            } label: {
+                HStack(spacing: 8) {
+                    Image(systemName: "paperplane.fill")
+                        .font(.system(size: 12))
+                    Text("Contacto / Comprar")
+                        .font(.system(size: 12, weight: .bold))
+                }
+                .foregroundColor(telegram)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 13)
+                .background(telegram.opacity(0.1))
+                .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                        .stroke(telegram.opacity(0.3), lineWidth: 1)
+                )
+            }
+            .buttonStyle(.plain)
         }
     }
 
@@ -506,6 +551,12 @@ struct EroMeView: View {
             }
         }
         if let url = URL(string: "https://apps.apple.com/app/id1300146617") {
+            UIApplication.shared.open(url)
+        }
+    }
+
+    private func openContact() {
+        if let url = URL(string: EroMeLink.contact) {
             UIApplication.shared.open(url)
         }
     }
