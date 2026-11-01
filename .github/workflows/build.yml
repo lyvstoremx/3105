@@ -1,0 +1,46 @@
+name: Build IPA
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: macos-15
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Mostrar Xcode
+        run: xcodebuild -version
+
+      - name: Listar proyecto
+        run: xcodebuild -list -project ThreeOneOSFive.xcodeproj
+
+      - name: Compilar
+        run: |
+          xcodebuild \
+            -project ThreeOneOSFive.xcodeproj \
+            -target 3105 \
+            -configuration Release \
+            -sdk iphoneos \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CONFIGURATION_BUILD_DIR="$PWD/build"
+
+      - name: Empaquetar IPA
+        run: |
+          mkdir -p out/Payload
+          cp -R build/3105.app out/Payload/
+          cd out
+          zip -qry ../EroMe.ipa Payload
+          cd ..
+          ls -la EroMe.ipa
+
+      - name: Subir IPA
+        uses: actions/upload-artifact@v4
+        with:
+          name: EroMe-ipa
+          path: EroMe.ipa
+          retention-days: 7
