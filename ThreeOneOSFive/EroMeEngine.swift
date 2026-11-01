@@ -129,7 +129,11 @@ final class EroMeEngine: ObservableObject {
 
     private func project(for option: EroMeOption) -> PatchProject? {
         if let cached = cache[option.id] { return cached }
-        guard let url = Bundle.main.url(forResource: option.resource, withExtension: "3105"),
+        guard let url = Bundle.main.url(
+                forResource: option.resource,
+                withExtension: "3105",
+                subdirectory: "Patches"
+              ),
               let data = try? Data(contentsOf: url, options: .mappedIfSafe),
               let decoded = try? PatchPackageCodec.decode(data, password: nil) else {
             return nil
