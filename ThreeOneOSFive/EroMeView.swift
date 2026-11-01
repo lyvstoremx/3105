@@ -5,16 +5,37 @@ import UIKit
 final class EroMeVoice {
     private let synth = AVSpeechSynthesizer()
 
+    private static let preferredNames = [
+        "Paulina", "Marisol", "Mónica", "Monica", "Sabina",
+        "Helena", "Lucía", "Lucia", "Angélica", "Angelica", "Mónica"
+    ]
+
     init() {
         try? AVAudioSession.sharedInstance().setCategory(.playback, options: [.duckOthers])
         try? AVAudioSession.sharedInstance().setActive(true)
     }
 
+    private func bestVoice() -> AVSpeechSynthesisVoice? {
+        let spanish = AVSpeechSynthesisVoice.speechVoices()
+            .filter { $0.language.hasPrefix("es") }
+        guard !spanish.isEmpty else { return nil }
+
+        let enhanced = spanish.filter { $0.quality == .enhanced }
+        let pool = enhanced.isEmpty ? spanish : enhanced
+
+        for name in Self.preferredNames {
+            if let match = pool.first(where: { $0.name.localizedCaseInsensitiveContains(name) }) {
+                return match
+            }
+        }
+        return pool.first
+    }
+
     func say(_ text: String) {
         let utterance = AVSpeechUtterance(string: text)
-        utterance.voice = AVSpeechSynthesisVoice(language: "es-MX")
-        utterance.pitchMultiplier = 1.9
-        utterance.rate = 0.45
+        utterance.voice = bestVoice()
+        utterance.pitchMultiplier = 2.0
+        utterance.rate = 0.4
         utterance.volume = 1
         synth.stopSpeaking(at: .immediate)
         synth.speak(utterance)
@@ -119,7 +140,7 @@ struct EroMeView: View {
     }
 
     private var header: some View {
-        HStack {
+        HStack(spacing: 10) {
             HStack(spacing: 7) {
                 Image(systemName: "heart.fill")
                     .font(.system(size: 15))
@@ -128,7 +149,13 @@ struct EroMeView: View {
                     .font(.system(size: 16, weight: .medium))
                     .foregroundStyle(.white)
             }
+            .contentShape(Rectangle())
+            .onLongPressGesture(minimumDuration: 3.0) {
+                showAdvanced = true
+            }
+
             Spacer()
+
             Text(activeCount > 0 ? "\(activeCount) activo\(activeCount == 1 ? "" : "s")" : "sin activar")
                 .font(.system(size: 11))
                 .foregroundStyle(activeCount > 0 ? accent : muted)
@@ -332,29 +359,35 @@ struct EroMeView: View {
     }
 
     private var footer: some View {
-        HStack {
-            Button("Comprar o contacto") {
+        HStack(spacing: 14) {
+            Button {
                 if let url = URL(string: EroMeLink.contact) {
                     UIApplication.shared.open(url)
                 }
+            } label: {
+                Text("Comprar o contacto")
+                    .font(.system(size: 11))
+                    .foregroundStyle(muted)
+                    .padding(.vertical, 10)
+                    .padding(.horizontal, 4)
             }
-            .font(.system(size: 11))
-            .foregroundStyle(muted)
+            .buttonStyle(.plain)
 
             Spacer()
 
-            Button(voiceOn ? "Voz: on" : "Voz: off") {
+            Button {
                 voiceOn.toggle()
                 if voiceOn { voice.say("Levi activado") }
+            } label: {
+                Text(voiceOn ? "Voz: on" : "Voz: off")
+                    .font(.system(size: 11))
+                    .foregroundStyle(voiceOn ? muted : line)
+                    .padding(.vertical, 10)
+                    .padding(.horizontal, 4)
             }
-            .font(.system(size: 11))
-            .foregroundStyle(voiceOn ? muted : line)
-
-            Button("Avanzado") { showAdvanced = true }
-                .font(.system(size: 11))
-                .foregroundStyle(muted)
+            .buttonStyle(.plain)
         }
-        .padding(.top, 16)
+        .padding(.top, 10)
         .padding(.bottom, 8)
     }
 }
