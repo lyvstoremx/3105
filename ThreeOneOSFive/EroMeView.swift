@@ -112,6 +112,9 @@ struct EroMeView: View {
     private let red = Color(red: 0.937, green: 0.42, blue: 0.42)
     private let muted = Color(red: 0.545, green: 0.545, blue: 0.588)
     private let telegram = Color(red: 0.259, green: 0.62, blue: 0.882)
+    private let violet = Color(red: 0.545, green: 0.361, blue: 0.965)
+    private let teal = Color(red: 0.235, green: 0.702, blue: 0.62)
+    private let blue = Color(red: 0.298, green: 0.588, blue: 0.937)
 
     private var valid: Bool {
         guard let expiry else { return false }
@@ -276,32 +279,24 @@ struct EroMeView: View {
 
                 Spacer()
 
-                Text("1 dispositivo")
-                    .font(.system(size: 10, weight: .semibold))
-                    .foregroundColor(muted)
-            }
-
-            if !valid {
-                Button {
-                    openContact()
-                } label: {
-                    HStack(spacing: 6) {
-                        Image(systemName: "paperplane.fill")
-                            .font(.system(size: 11))
-                        Text("Comprar una key")
-                            .font(.system(size: 11, weight: .bold))
+                if key.isEmpty {
+                    Text("1 dispositivo")
+                        .font(.system(size: 10, weight: .semibold))
+                        .foregroundColor(muted)
+                } else {
+                    Button {
+                        removeKey()
+                    } label: {
+                        HStack(spacing: 5) {
+                            Image(systemName: "key.slash.fill")
+                                .font(.system(size: 10))
+                            Text("Quitar key")
+                                .font(.system(size: 11, weight: .bold))
+                        }
+                        .foregroundColor(red)
                     }
-                    .foregroundColor(telegram)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 10)
-                    .background(telegram.opacity(0.12))
-                    .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 10, style: .continuous)
-                            .stroke(telegram.opacity(0.3), lineWidth: 1)
-                    )
+                    .buttonStyle(.plain)
                 }
-                .buttonStyle(.plain)
             }
         }
         .padding(14)
@@ -326,13 +321,6 @@ struct EroMeView: View {
             ForEach(EroMeOption.all.filter { $0.kind == .hologram }) { option in
                 row(option)
             }
-
-            if valid && activeCount == 0 {
-                Text("Toca una opcion para activarla")
-                    .font(.system(size: 10, weight: .medium))
-                    .foregroundColor(muted)
-                    .padding(.top, 2)
-            }
         }
         .padding(12)
         .background(card)
@@ -340,6 +328,28 @@ struct EroMeView: View {
         .overlay(
             RoundedRectangle(cornerRadius: 16, style: .continuous).stroke(line, lineWidth: 1)
         )
+    }
+
+    private func tint(_ option: EroMeOption) -> Color {
+        switch option.id {
+        case "aim_drag": return violet
+        case "aim_head": return accent
+        case "aim_cuello": return blue
+        case "holo_armas": return violet
+        case "holo_personajes": return teal
+        default: return muted
+        }
+    }
+
+    private func symbol(_ option: EroMeOption) -> String {
+        switch option.id {
+        case "aim_drag": return "hand.draw.fill"
+        case "aim_head": return "target"
+        case "aim_cuello": return "figure.arms.open"
+        case "holo_armas": return "wand.and.stars"
+        case "holo_personajes": return "person.crop.square.fill"
+        default: return "square.fill"
+        }
     }
 
     private func row(_ option: EroMeOption) -> some View {
@@ -350,10 +360,15 @@ struct EroMeView: View {
         return Button {
             engine.toggle(option)
         } label: {
-            HStack(spacing: 10) {
-                Circle()
-                    .fill(on ? green : red)
-                    .frame(width: 7, height: 7)
+            HStack(spacing: 11) {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 9, style: .continuous)
+                        .fill(tint(option).opacity(0.16))
+                        .frame(width: 34, height: 34)
+                    Image(systemName: symbol(option))
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundColor(tint(option))
+                }
 
                 VStack(alignment: .leading, spacing: 2) {
                     Text(option.title)
@@ -381,8 +396,8 @@ struct EroMeView: View {
                         )
                 }
             }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 11)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 10)
             .background(Color.white.opacity(0.03))
             .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
             .overlay(
@@ -396,10 +411,12 @@ struct EroMeView: View {
 
     private var footer: some View {
         VStack(spacing: 12) {
-            Text(statusText)
-                .font(.system(size: 11, weight: .medium))
-                .foregroundColor(statusColor)
-                .multilineTextAlignment(.center)
+            if valid {
+                Text(statusText)
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundColor(statusColor)
+                    .multilineTextAlignment(.center)
+            }
 
             HStack(spacing: 6) {
                 Image(systemName: "checkmark.seal.fill")
@@ -420,16 +437,17 @@ struct EroMeView: View {
                 HStack(spacing: 8) {
                     Image(systemName: "gamecontroller.fill")
                         .font(.system(size: 13))
-                    Text("Abrir Free Fire")
+                    Text("Abrir Free Fire Max")
                         .font(.system(size: 13, weight: .bold))
                 }
                 .foregroundColor(.white)
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 14)
-                .background(Color.white.opacity(0.06))
+                .background(accent)
                 .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
                 .overlay(
-                    RoundedRectangle(cornerRadius: 14, style: .continuous).stroke(line, lineWidth: 1)
+                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                        .stroke(accent.opacity(0.7), lineWidth: 1)
                 )
             }
             .buttonStyle(.plain)
@@ -458,7 +476,6 @@ struct EroMeView: View {
     }
 
     private var statusText: String {
-        if !valid { return "Activa una key para usar los parches" }
         switch engine.phase {
         case .idle: return "Listo"
         case .working(let t): return t
@@ -506,6 +523,14 @@ struct EroMeView: View {
             UserDefaults.standard.set(date, forKey: expiryField)
             expiry = date
         }
+    }
+
+    private func removeKey() {
+        key = ""
+        expiry = nil
+        keyMsg = nil
+        UserDefaults.standard.removeObject(forKey: keyField)
+        UserDefaults.standard.removeObject(forKey: expiryField)
     }
 
     private func activate() {
