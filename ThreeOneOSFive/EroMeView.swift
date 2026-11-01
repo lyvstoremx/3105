@@ -103,7 +103,6 @@ struct EroMeView: View {
                         .padding(.top, 6)
                     ForEach(EroMeOption.all.filter { $0.kind == .hologram }) { row($0) }
                     statusBar
-                    howToCard
                     footer
                 }
                 .padding(16)
@@ -120,38 +119,25 @@ struct EroMeView: View {
     }
 
     private var header: some View {
-        VStack(spacing: 10) {
-            ZStack {
-                Circle()
-                    .fill(card)
-                    .frame(width: 96, height: 96)
-                    .overlay(Circle().stroke(line, lineWidth: 1))
+        HStack {
+            HStack(spacing: 7) {
                 Image(systemName: "heart.fill")
-                    .font(.system(size: 40))
+                    .font(.system(size: 15))
                     .foregroundStyle(accent)
+                Text("EroMe")
+                    .font(.system(size: 16, weight: .medium))
+                    .foregroundStyle(.white)
             }
-            Text("EroMe")
-                .font(.system(size: 22, weight: .medium))
-                .foregroundStyle(.white)
-            HStack(spacing: 6) {
-                Text("Free Fire")
-                    .font(.system(size: 11))
-                    .foregroundStyle(muted)
-                Text("·")
-                    .font(.system(size: 11))
-                    .foregroundStyle(line)
-                Text(activeCount > 0 ? "\(activeCount) activo\(activeCount == 1 ? "" : "s")" : "sin activar")
-                    .font(.system(size: 11))
-                    .foregroundStyle(activeCount > 0 ? accent : muted)
-            }
-            .padding(.horizontal, 11)
-            .padding(.vertical, 4)
-            .background(card, in: Capsule())
-            .overlay(Capsule().stroke(line, lineWidth: 1))
+            Spacer()
+            Text(activeCount > 0 ? "\(activeCount) activo\(activeCount == 1 ? "" : "s")" : "sin activar")
+                .font(.system(size: 11))
+                .foregroundStyle(activeCount > 0 ? accent : muted)
+                .padding(.horizontal, 9)
+                .padding(.vertical, 3)
+                .background(card, in: Capsule())
+                .overlay(Capsule().stroke(activeCount > 0 ? accent : line, lineWidth: 1))
         }
-        .frame(maxWidth: .infinity)
-        .padding(.top, 14)
-        .padding(.bottom, 18)
+        .padding(.bottom, 16)
     }
 
     private var keyCard: some View {
@@ -207,6 +193,31 @@ struct EroMeView: View {
                         .font(.system(size: 11))
                         .foregroundStyle(accent)
                 }
+            }
+
+            Rectangle()
+                .fill(line)
+                .frame(height: 1)
+                .padding(.vertical, 1)
+
+            HStack {
+                Text("Dispositivos permitidos")
+                    .font(.system(size: 10))
+                    .foregroundStyle(muted)
+                Spacer()
+                Text("1")
+                    .font(.system(size: 10, weight: .medium))
+                    .foregroundStyle(.white)
+            }
+
+            HStack {
+                Text("iOS soportado")
+                    .font(.system(size: 10))
+                    .foregroundStyle(muted)
+                Spacer()
+                Text("26.0 – 26.6.1 · 27 beta")
+                    .font(.system(size: 10))
+                    .foregroundStyle(.white)
             }
         }
         .padding(12)
@@ -318,25 +329,6 @@ struct EroMeView: View {
         case .failed: return Color(red: 0.937, green: 0.42, blue: 0.42)
         default: return muted
         }
-    }
-
-    private var howToCard: some View {
-        VStack(alignment: .leading, spacing: 7) {
-            Text("Cómo usar")
-                .font(.system(size: 11, weight: .medium))
-                .foregroundStyle(.white)
-            Text("1. Cierra Free Fire por completo")
-            Text("2. Activa lo que quieras aquí")
-            Text("3. Abre el juego")
-            Text("Para volver a lo normal, apaga cada opción.")
-        }
-        .font(.system(size: 11))
-        .foregroundStyle(muted)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(12)
-        .background(card, in: RoundedRectangle(cornerRadius: 12))
-        .overlay(RoundedRectangle(cornerRadius: 12).stroke(line, lineWidth: 1))
-        .padding(.top, 16)
     }
 
     private var footer: some View {
