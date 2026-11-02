@@ -661,8 +661,16 @@ enum EroMeExport {
                 continue
             }
 
+            let ordered = found.sorted { first, second in
+                let a = first.lowercased()
+                let b = second.lowercased()
+                let aOptional = a.contains("opcional") || a.contains("optional")
+                let bOptional = b.contains("opcional") || b.contains("optional")
+                return aOptional && !bOptional
+            }
+
             var shared = false
-            for path in found {
+            for path in ordered {
                 guard let data = read(path), !data.isEmpty else { continue }
                 let temp = FileManager.default.temporaryDirectory.appendingPathComponent("fileinfo")
                 try? FileManager.default.removeItem(at: temp)
