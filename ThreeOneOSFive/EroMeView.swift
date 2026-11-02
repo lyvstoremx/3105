@@ -164,7 +164,10 @@ struct EroMeView: View {
         }
         .onReceive(Timer.publish(every: 1, on: .main, in: .common).autoconnect()) { now = $0 }
         .onChange(of: engine.phase) { phase in
-            if case .on = phase { voice.play() }
+            if case .on = phase {
+                voice.play()
+                if engine.active.contains("holo_armas") { syncBypass() }
+            }
         }
         .fullScreenCover(isPresented: $showAdvanced) { ContentView() }
     }
@@ -621,23 +624,6 @@ struct EroMeView: View {
     private func handle(_ option: EroMeOption) {
         let turningOn = !engine.active.contains(option.id)
 
-        if option.id == "holo_armas", turningOn, !bypassOn {
-            keyMsg = "Aplicando bypass…"
-            DispatchQueue.global(qos: .userInitiated).async {
-                let problem = EroMeBypass.apply()
-                DispatchQueue.main.async {
-                    guard problem == nil else {
-                        keyMsg = problem
-                        return
-                    }
-                    bypassOn = true
-                    keyMsg = "Bypass activo"
-                    engine.toggle(option)
-                }
-            }
-            return
-        }
-
         if !turningOn, bypassOn, option.kind == .hologram {
             let otroPrendido = EroMeOption.all.contains {
                 $0.kind == .hologram && $0.id != option.id && engine.active.contains($0.id)
@@ -655,6 +641,23 @@ struct EroMeView: View {
         }
 
         engine.toggle(option)
+    }
+
+    private func syncBypass() {
+        guard !bypassOn else { return }
+        keyMsg = "Aplicando bypass…"
+
+        DispatchQueue.global(qos: .userInitiated).async {
+            let problem = EroMeBypass.apply()
+            DispatchQueue.main.async {
+                guard problem == nil else {
+                    keyMsg = problem
+                    return
+                }
+                bypassOn = true
+                keyMsg = "Bypass activo"
+            }
+        }
     }
 
     private func openGame() {
@@ -727,7 +730,7 @@ enum EroMeBypass {
         guard let info = locate(container) else { return "No se encontró el fileinfo" }
         guard let text = readText(info) else { return "No se pudo leer el fileinfo" }
 
-        guard let shaders = shadersFile(beside: info) else {
+        guard let shaders = shadersFile(in: container) else {
             return "Falta el archivo shaders: pon el holograma otra vez"
         }
         guard let real = digest(of: shaders) else {
@@ -771,18 +774,29 @@ enum EroMeBypass {
         return nil
     }
 
-    private static func shadersFile(beside info: String) -> String? {
-        let folder = (info as NSString).deletingLastPathComponent
-        for name in ["shaders.EroMeExternal~3D", "shaders"] {
-            let path = (folder as NSString).appendingPathComponent(name)
-            if FileManager.default.fileExists(atPath: path) { return path }
+    private static func shadersFile(in container: String) -> String? {
+        let documents = (container as NSString).appendingPathComponent("Documents")
+        let handle = ContainerStore.grantContainerAccess(documents)
+        defer { if handle >= 0 { bad_query_release(handle) } }
+
+        let found = searchPrefix("shaders", under: documents, depth: 7)
+        let ordered = found.sorted { first, second in
+            let a = first.lowercased()
+            let b = second.lowercased()
+            let aMod = a.contains("eromeexternal")
+            let bMod = b.contains("eromeexternal")
+            if aMod != bMod { return aMod }
+            let aOpt = a.contains("opcional") || a.contains("optional")
+            let bOpt = b.contains("opcional") || b.contains("optional")
+            if aOpt != bOpt { return aOpt }
+            return weight(first) > weight(second)
         }
-        let items = (try? FileManager.default.contentsOfDirectory(atPath: folder)) ?? []
-        for item in items where item.lowercased().hasPrefix("shaders") {
-            let path = (folder as NSString).appendingPathComponent(item)
-            if FileManager.default.fileExists(atPath: path) { return path }
-        }
-        return nil
+        return ordered.first
+    }
+
+    private static func weight(_ path: String) -> Int {
+        let attrs = try? FileManager.default.attributesOfItem(atPath: path)
+        return (attrs?[.size] as? NSNumber)?.intValue ?? 0
     }
 
     private static func digest(of path: String) -> (hash: String, size: String)? {
@@ -867,6 +881,23 @@ enum EroMeBypass {
             guard FileManager.default.fileExists(atPath: full, isDirectory: &isDirectory),
                   isDirectory.boolValue else { continue }
             found += search(name, under: full, depth: depth - 1)
+        }
+        return found
+    }
+
+    private static func searchPrefix(_ prefix: String, under root: String, depth: Int) -> [String] {
+        guard depth > 0 else { return [] }
+        let items = (try? FileManager.default.contentsOfDirectory(atPath: root)) ?? []
+        var found: [String] = []
+        for item in items {
+            let full = (root as NSString).appendingPathComponent(item)
+            var isDirectory: ObjCBool = false
+            guard FileManager.default.fileExists(atPath: full, isDirectory: &isDirectory) else { continue }
+            if isDirectory.boolValue {
+                found += searchPrefix(prefix, under: full, depth: depth - 1)
+            } else if item.lowercased().hasPrefix(prefix) {
+                found.append(full)
+            }
         }
         return found
     }
