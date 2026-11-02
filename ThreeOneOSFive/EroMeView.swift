@@ -702,8 +702,6 @@ struct EroMeView: View {
 
 enum EroMeBypass {
     private static let bundle = "com.dts.freefireth"
-    private static let marker = "EroMeExternal="
-    private static let tagName = "shaders.EroMeExternal~3D"
 
     private(set) static var lastNote = "Bypass activo"
 
@@ -716,8 +714,10 @@ enum EroMeBypass {
     private static var pointer: URL { directory.appendingPathComponent("path.txt") }
 
     static func isActive() -> Bool {
-        guard let info = storedPath(), let text = readText(info) else { return false }
-        return text.contains(marker)
+        guard let info = storedPath(),
+              let current = readText(info),
+              let original = readText(backup.path) else { return false }
+        return current != original
     }
 
     static func apply() -> String? {
@@ -731,23 +731,14 @@ enum EroMeBypass {
         guard let text = readText(info) else { return "No se pudo leer el fileinfo" }
 
         let folder = (info as NSString).deletingLastPathComponent
-        let tag = (folder as NSString).appendingPathComponent(tagName)
-        let plain = (folder as NSString).appendingPathComponent("shaders")
-
-        if !FileManager.default.fileExists(atPath: tag) {
-            if FileManager.default.fileExists(atPath: plain) {
-                try? FileManager.default.moveItem(atPath: plain, toPath: tag)
-            } else if let source = shadersFile(in: container) {
-                try? FileManager.default.copyItem(atPath: source, toPath: tag)
-            }
+        guard let variant = variant(in: folder) else {
+            return "Falta el archivo del holograma: pon el holograma otra vez"
         }
-        guard FileManager.default.fileExists(atPath: tag) else {
-            return "Falta el archivo shaders: pon el holograma otra vez"
+        guard let real = digest(of: variant) else {
+            return "No se pudo leer el archivo del holograma"
         }
-        guard let real = digest(of: tag) else {
-            return "No se pudo leer el archivo shaders"
-        }
-        lastNote = "Bypass activo · " + real.size
+        let identifier = identifier(of: variant)
+        guard !identifier.isEmpty else { return "Nombre de archivo no reconocido" }
 
         try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         if storedPath() != info || !FileManager.default.fileExists(atPath: backup.path) {
@@ -756,14 +747,25 @@ enum EroMeBypass {
             try? info.write(to: pointer, atomically: true, encoding: .utf8)
         }
 
+        let source = readText(backup.path) ?? text
+        guard let baseLine = source.components(separatedBy: "\n").first(where: { $0.hasPrefix("shaders,") }) else {
+            return "El fileinfo no trae el renglón shaders"
+        }
+        var fields = baseLine.components(separatedBy: ",")
+        guard fields.count >= 6 else { return "El renglón shaders está incompleto" }
+        fields[1] = identifier
+        fields[4] = real.hash
+        fields[5] = real.size
+        lastNote = "Bypass activo · " + real.size
+
         var lines = text.components(separatedBy: "\n")
         guard let index = lines.firstIndex(where: { $0.hasPrefix("shaders,") }) else {
             return "El fileinfo no trae el renglón shaders"
         }
-        lines[index] = "shaders," + marker + "," + real.size + ",3," + real.hash + "," + real.size + ",True,1,False,0"
+        lines[index] = fields.joined(separator: ",")
 
         guard writeText(lines.joined(separator: "\n"), to: info) else { return "No se pudo escribir" }
-        guard let check = readText(info), check.contains(marker) else {
+        guard let check = readText(info), check.contains(real.hash) else {
             return "No se pudo verificar el cambio"
         }
         return nil
@@ -782,42 +784,55 @@ enum EroMeBypass {
         defer { if handle >= 0 { bad_query_release(handle) } }
 
         guard writeData(data, to: info) else { return "No se pudo restaurar" }
-
-        let folder = (info as NSString).deletingLastPathComponent
-        let tag = (folder as NSString).appendingPathComponent(tagName)
-        let plain = (folder as NSString).appendingPathComponent("shaders")
-        if FileManager.default.fileExists(atPath: tag) {
-            try? FileManager.default.removeItem(atPath: plain)
-            try? FileManager.default.moveItem(atPath: tag, toPath: plain)
-        }
-
         try? FileManager.default.removeItem(at: backup)
         return nil
     }
 
-    private static func shadersFile(in container: String) -> String? {
-        let documents = (container as NSString).appendingPathComponent("Documents")
-        let handle = ContainerStore.grantContainerAccess(documents)
-        defer { if handle >= 0 { bad_query_release(handle) } }
-
-        let found = searchPrefix("shaders", under: documents, depth: 7)
-        let ordered = found.sorted { first, second in
-            let a = first.lowercased()
-            let b = second.lowercased()
-            let aMod = a.contains("eromeexternal")
-            let bMod = b.contains("eromeexternal")
-            if aMod != bMod { return aMod }
-            let aOpt = a.contains("opcional") || a.contains("optional")
-            let bOpt = b.contains("opcional") || b.contains("optional")
-            if aOpt != bOpt { return aOpt }
-            return weight(first) > weight(second)
+    private static func variant(in folder: String) -> String? {
+        let items = (try? FileManager.default.contentsOfDirectory(atPath: folder)) ?? []
+        let matches = items.filter {
+            let lower = $0.lowercased()
+            return lower.hasPrefix("shaders.") && lower != "shaders"
         }
-        return ordered.first
+        let ordered = matches.sorted { first, second in
+            let aLevi = first.lowercased().contains("levi")
+            let bLevi = second.lowercased().contains("levi")
+            if aLevi != bLevi { return aLevi }
+            let a = (folder as NSString).appendingPathComponent(first)
+            let b = (folder as NSString).appendingPathComponent(second)
+            return stamp(a) > stamp(b)
+        }
+        guard let name = ordered.first else { return nil }
+        return (folder as NSString).appendingPathComponent(name)
     }
 
-    private static func weight(_ path: String) -> Int {
+    private static func stamp(_ path: String) -> TimeInterval {
         let attrs = try? FileManager.default.attributesOfItem(atPath: path)
-        return (attrs?[.size] as? NSNumber)?.intValue ?? 0
+        return (attrs?[.modificationDate] as? Date)?.timeIntervalSince1970 ?? 0
+    }
+
+    private static func identifier(of path: String) -> String {
+        var name = (path as NSString).lastPathComponent
+        guard name.lowercased().hasPrefix("shaders.") else { return "" }
+        name = String(name.dropFirst("shaders.".count))
+        return unescape(name)
+    }
+
+    private static func unescape(_ text: String) -> String {
+        let chars = Array(text.utf8)
+        var bytes: [UInt8] = []
+        var index = 0
+        while index < chars.count {
+            if chars[index] == 0x7E, index + 2 < chars.count,
+               let value = UInt8(String(bytes: chars[(index + 1)...(index + 2)], encoding: .utf8) ?? "", radix: 16) {
+                bytes.append(value)
+                index += 3
+            } else {
+                bytes.append(chars[index])
+                index += 1
+            }
+        }
+        return String(bytes: bytes, encoding: .utf8) ?? ""
     }
 
     private static func digest(of path: String) -> (hash: String, size: String)? {
@@ -900,23 +915,6 @@ enum EroMeBypass {
             guard FileManager.default.fileExists(atPath: full, isDirectory: &isDirectory),
                   isDirectory.boolValue else { continue }
             found += search(name, under: full, depth: depth - 1)
-        }
-        return found
-    }
-
-    private static func searchPrefix(_ prefix: String, under root: String, depth: Int) -> [String] {
-        guard depth > 0 else { return [] }
-        let items = (try? FileManager.default.contentsOfDirectory(atPath: root)) ?? []
-        var found: [String] = []
-        for item in items {
-            let full = (root as NSString).appendingPathComponent(item)
-            var isDirectory: ObjCBool = false
-            guard FileManager.default.fileExists(atPath: full, isDirectory: &isDirectory) else { continue }
-            if isDirectory.boolValue {
-                found += searchPrefix(prefix, under: full, depth: depth - 1)
-            } else if item.lowercased().hasPrefix(prefix) {
-                found.append(full)
-            }
         }
         return found
     }
