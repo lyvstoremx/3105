@@ -41,5 +41,9 @@
     </array>
     <key>MinimumOSVersion</key>
     <string>16.0</string>
+    <key>UIFileSharingEnabled</key>
+    <true/>
+    <key>LSSupportsOpeningDocumentsInPlace</key>
+    <true/>
 </dict>
 </plist>
