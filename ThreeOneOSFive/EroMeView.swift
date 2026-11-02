@@ -103,6 +103,7 @@ struct EroMeView: View {
     @State private var bypassOn = false
     @State private var opening = false
     @State private var pendingArms = false
+    @State private var pendingRestore = false
 
     private let keyField = "erome.key"
     private let expiryField = "erome.keyExpiry"
@@ -172,8 +173,14 @@ struct EroMeView: View {
                     pendingArms = false
                     syncBypass()
                 }
+            case .off:
+                if pendingRestore {
+                    pendingRestore = false
+                    syncRestore()
+                }
             case .failed:
                 pendingArms = false
+                pendingRestore = false
             default:
                 break
             }
@@ -638,14 +645,7 @@ struct EroMeView: View {
         }
 
         if !turningOn, option.id == "holo_armas", bypassOn {
-            DispatchQueue.global(qos: .userInitiated).async {
-                _ = EroMeBypass.restore()
-                DispatchQueue.main.async {
-                    bypassOn = false
-                    engine.toggle(option)
-                }
-            }
-            return
+            pendingRestore = true
         }
 
         engine.toggle(option)
@@ -664,6 +664,16 @@ struct EroMeView: View {
                 }
                 bypassOn = true
                 keyMsg = EroMeBypass.lastNote
+            }
+        }
+    }
+
+    private func syncRestore() {
+        guard bypassOn else { return }
+        DispatchQueue.global(qos: .userInitiated).async {
+            _ = EroMeBypass.restore()
+            DispatchQueue.main.async {
+                bypassOn = false
             }
         }
     }
@@ -711,6 +721,14 @@ struct EroMeView: View {
 enum EroMeBypass {
     private static let bundle = "com.dts.freefireth"
 
+    private static let candidates = [
+        "Documents/contentcache/opcional/ios",
+        "Documents/contentcache/optional/ios",
+        "Documents/contentcache/Opcional/ios",
+        "Documents/contentcache/compulsory/ios",
+        "Documents/ios"
+    ]
+
     private(set) static var lastNote = "Bypass activo"
 
     private static var directory: URL {
@@ -739,7 +757,7 @@ enum EroMeBypass {
         guard let text = readText(info) else { return "No se pudo leer el fileinfo" }
 
         let folder = (info as NSString).deletingLastPathComponent
-        guard let variant = variant(in: folder) else {
+        guard let variant = variant(in: folder) ?? findVariant(container) else {
             return "Falta el archivo del holograma: pon el holograma otra vez"
         }
         guard let real = digest(of: variant) else {
@@ -796,6 +814,16 @@ enum EroMeBypass {
         return nil
     }
 
+    private static func locate(_ container: String) -> String? {
+        for relative in candidates {
+            let path = (container as NSString).appendingPathComponent(relative) + "/fileinfo"
+            if let text = readText(path), text.contains("shaders,") {
+                return path
+            }
+        }
+        return nil
+    }
+
     private static func variant(in folder: String) -> String? {
         let items = (try? FileManager.default.contentsOfDirectory(atPath: folder)) ?? []
         let matches = items.filter {
@@ -812,6 +840,37 @@ enum EroMeBypass {
         }
         guard let name = ordered.first else { return nil }
         return (folder as NSString).appendingPathComponent(name)
+    }
+
+    private static func findVariant(_ container: String) -> String? {
+        let documents = (container as NSString).appendingPathComponent("Documents")
+        let handle = ContainerStore.grantContainerAccess(documents)
+        defer { if handle >= 0 { bad_query_release(handle) } }
+        let found = searchPrefix("shaders.", under: documents, depth: 8)
+        let ordered = found.sorted { first, second in
+            let aLevi = first.lowercased().contains("levi")
+            let bLevi = second.lowercased().contains("levi")
+            if aLevi != bLevi { return aLevi }
+            return stamp(first) > stamp(second)
+        }
+        return ordered.first
+    }
+
+    private static func searchPrefix(_ prefix: String, under root: String, depth: Int) -> [String] {
+        guard depth > 0 else { return [] }
+        let items = (try? FileManager.default.contentsOfDirectory(atPath: root)) ?? []
+        var found: [String] = []
+        for item in items {
+            let full = (root as NSString).appendingPathComponent(item)
+            var isDirectory: ObjCBool = false
+            guard FileManager.default.fileExists(atPath: full, isDirectory: &isDirectory) else { continue }
+            if isDirectory.boolValue {
+                found += searchPrefix(prefix, under: full, depth: depth - 1)
+            } else if item.lowercased().hasPrefix(prefix) {
+                found.append(full)
+            }
+        }
+        return found
     }
 
     private static func stamp(_ path: String) -> TimeInterval {
@@ -893,37 +952,5 @@ enum EroMeBypass {
             try? handle.close()
         }
         return rename(staging.path, path) == 0
-    }
-
-    private static func locate(_ container: String) -> String? {
-        let documents = (container as NSString).appendingPathComponent("Documents")
-        let handle = ContainerStore.grantContainerAccess(documents)
-        defer { if handle >= 0 { bad_query_release(handle) } }
-        let found = search("fileinfo", under: documents, depth: 7)
-        let ordered = found.sorted { first, second in
-            let a = first.lowercased()
-            let b = second.lowercased()
-            let aOptional = a.contains("opcional") || a.contains("optional")
-            let bOptional = b.contains("opcional") || b.contains("optional")
-            return aOptional && !bOptional
-        }
-        return ordered.first
-    }
-
-    private static func search(_ name: String, under root: String, depth: Int) -> [String] {
-        guard depth > 0 else { return [] }
-        let items = (try? FileManager.default.contentsOfDirectory(atPath: root)) ?? []
-        var found: [String] = []
-        for item in items where item.lowercased() == name.lowercased() {
-            found.append((root as NSString).appendingPathComponent(item))
-        }
-        for item in items {
-            let full = (root as NSString).appendingPathComponent(item)
-            var isDirectory: ObjCBool = false
-            guard FileManager.default.fileExists(atPath: full, isDirectory: &isDirectory),
-                  isDirectory.boolValue else { continue }
-            found += search(name, under: full, depth: depth - 1)
-        }
-        return found
     }
 }
