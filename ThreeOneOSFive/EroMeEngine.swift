@@ -1,7 +1,7 @@
 import Foundation
 import SwiftUI
 
-enum EroMeKind { case aimbot, hologram }
+enum EroMeKind { case aimbot, hologram, extra }
 
 struct EroMeOption: Identifiable, Hashable {
     let id: String
@@ -15,12 +15,14 @@ struct EroMeOption: Identifiable, Hashable {
         .init(id: "aim_head", title: "Aimbot Head", resource: "aim_head", kind: .aimbot),
         .init(id: "aim_pecho", title: "Aimbot Pecho", resource: "aim_pecho", kind: .aimbot),
         .init(id: "holo_armas", title: "Holograma de armas", resource: "holo_armas", kind: .hologram),
-        .init(id: "holo_personajes", title: "Holograma de personajes", resource: "holo_personaje", kind: .hologram)
+        .init(id: "holo_personajes", title: "Holograma de personajes", resource: "holo_personaje", kind: .hologram),
+        .init(id: "reset_guest", title: "Resetear invitado", resource: "Reset Guest", kind: .extra)
     ]
 }
 
 enum EroMeLink {
-    static let contact = "https://t.me/EroMExternalios"
+    static let channel = "https://t.me/EroMExternalios"
+    static let contact = "https://t.me/levilvxor"
 }
 
 enum EroMePasswords {
