@@ -102,6 +102,7 @@ struct EroMeView: View {
     @State private var now = Date()
     @State private var bypassOn = false
     @State private var opening = false
+    @State private var pendingArms = false
 
     private let keyField = "erome.key"
     private let expiryField = "erome.keyExpiry"
@@ -164,9 +165,17 @@ struct EroMeView: View {
         }
         .onReceive(Timer.publish(every: 1, on: .main, in: .common).autoconnect()) { now = $0 }
         .onChange(of: engine.phase) { phase in
-            if case .on = phase {
+            switch phase {
+            case .on:
                 voice.play()
-                if engine.active.contains("holo_armas") { syncBypass() }
+                if pendingArms {
+                    pendingArms = false
+                    syncBypass()
+                }
+            case .failed:
+                pendingArms = false
+            default:
+                break
             }
         }
         .fullScreenCover(isPresented: $showAdvanced) { ContentView() }
@@ -624,20 +633,19 @@ struct EroMeView: View {
     private func handle(_ option: EroMeOption) {
         let turningOn = !engine.active.contains(option.id)
 
-        if !turningOn, bypassOn, option.kind == .hologram {
-            let otroPrendido = EroMeOption.all.contains {
-                $0.kind == .hologram && $0.id != option.id && engine.active.contains($0.id)
-            }
-            if !otroPrendido {
-                DispatchQueue.global(qos: .userInitiated).async {
-                    _ = EroMeBypass.restore()
-                    DispatchQueue.main.async {
-                        bypassOn = false
-                        engine.toggle(option)
-                    }
+        if turningOn, option.id == "holo_armas" {
+            pendingArms = true
+        }
+
+        if !turningOn, option.id == "holo_armas", bypassOn {
+            DispatchQueue.global(qos: .userInitiated).async {
+                _ = EroMeBypass.restore()
+                DispatchQueue.main.async {
+                    bypassOn = false
+                    engine.toggle(option)
                 }
-                return
             }
+            return
         }
 
         engine.toggle(option)
