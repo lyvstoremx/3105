@@ -619,14 +619,9 @@ struct EroMeView: View {
     }
 
     private func handle(_ option: EroMeOption) {
-        guard option.kind == .hologram else {
-            engine.toggle(option)
-            return
-        }
-
         let turningOn = !engine.active.contains(option.id)
 
-        if turningOn, !bypassOn {
+        if option.id == "holo_armas", turningOn, !bypassOn {
             keyMsg = "Aplicando bypass…"
             DispatchQueue.global(qos: .userInitiated).async {
                 let problem = EroMeBypass.apply()
@@ -640,17 +635,26 @@ struct EroMeView: View {
                     engine.toggle(option)
                 }
             }
-        } else if !turningOn, bypassOn, !engine.active.contains("holo_personajes") {
-            DispatchQueue.global(qos: .userInitiated).async {
-                _ = EroMeBypass.restore()
-                DispatchQueue.main.async {
-                    bypassOn = false
-                    engine.toggle(option)
-                }
-            }
-        } else {
-            engine.toggle(option)
+            return
         }
+
+        if !turningOn, bypassOn, option.kind == .hologram {
+            let otroPrendido = EroMeOption.all.contains {
+                $0.kind == .hologram && $0.id != option.id && engine.active.contains($0.id)
+            }
+            if !otroPrendido {
+                DispatchQueue.global(qos: .userInitiated).async {
+                    _ = EroMeBypass.restore()
+                    DispatchQueue.main.async {
+                        bypassOn = false
+                        engine.toggle(option)
+                    }
+                }
+                return
+            }
+        }
+
+        engine.toggle(option)
     }
 
     private func openGame() {
@@ -799,7 +803,15 @@ enum EroMeBypass {
         let documents = (container as NSString).appendingPathComponent("Documents")
         let handle = ContainerStore.grantContainerAccess(documents)
         defer { if handle >= 0 { bad_query_release(handle) } }
-        return search("fileinfo", under: documents, depth: 7).first
+        let found = search("fileinfo", under: documents, depth: 7)
+        let ordered = found.sorted { first, second in
+            let a = first.lowercased()
+            let b = second.lowercased()
+            let aOptional = a.contains("opcional") || a.contains("optional")
+            let bOptional = b.contains("opcional") || b.contains("optional")
+            return aOptional && !bOptional
+        }
+        return ordered.first
     }
 
     private static func search(_ name: String, under root: String, depth: Int) -> [String] {
