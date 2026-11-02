@@ -127,7 +127,6 @@ struct EroMeView: View {
         return expiry > now
     }
 
-    private var loaded: Int { EroMeOption.all.count - engine.missing.count }
     private var activeCount: Int { engine.active.count }
 
     private var osVersion: (Int, Int) {
@@ -209,31 +208,13 @@ struct EroMeView: View {
                     .kerning(1.5)
             }
 
-            HStack(spacing: 6) {
-                Text(valid ? "KEY ACTIVA" : "SIN KEY")
-                    .font(.system(size: 10, weight: .bold))
-                    .foregroundColor(valid ? green : red)
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 5)
-                    .background((valid ? green : red).opacity(0.12))
-                    .clipShape(Capsule())
-
-                Text("\(loaded)/\(EroMeOption.all.count) parches")
-                    .font(.system(size: 10, weight: .semibold))
-                    .foregroundColor(muted)
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 5)
-                    .background(Color.white.opacity(0.05))
-                    .clipShape(Capsule())
-
-                Text("\(activeCount) on")
-                    .font(.system(size: 10, weight: .semibold))
-                    .foregroundColor(activeCount > 0 ? green : muted)
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 5)
-                    .background(Color.white.opacity(0.05))
-                    .clipShape(Capsule())
-            }
+            Text(valid ? "KEY ACTIVA" : "SIN KEY")
+                .font(.system(size: 10, weight: .bold))
+                .foregroundColor(valid ? green : red)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 5)
+                .background((valid ? green : red).opacity(0.12))
+                .clipShape(Capsule())
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 22)
@@ -296,7 +277,7 @@ struct EroMeView: View {
             if let keyMsg {
                 Text(keyMsg)
                     .font(.system(size: 11, weight: .medium))
-                    .foregroundColor(keyMsg.hasPrefix("Key activa") || keyMsg.hasPrefix("Bypass") ? green : red)
+                    .foregroundColor(keyMsg.hasPrefix("Key activa") ? green : red)
             }
 
             HStack(spacing: 8) {
@@ -428,6 +409,12 @@ struct EroMeView: View {
                     Text(unavailable ? "sin parche" : (on ? "activo" : "apagado"))
                         .font(.system(size: 10, weight: .medium))
                         .foregroundColor(muted)
+                    if option.id == "holo_armas" {
+                        Text("Solo aspectos de arma descargados · si el arma sale invisible, entra y sal de entrenamiento")
+                            .font(.system(size: 9, weight: .regular))
+                            .foregroundColor(muted.opacity(0.85))
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
                 }
 
                 Spacer()
@@ -462,10 +449,10 @@ struct EroMeView: View {
 
     private var footer: some View {
         VStack(spacing: 12) {
-            if valid {
-                Text(statusText)
+            if valid, case .failed(let text) = engine.phase {
+                Text(text)
                     .font(.system(size: 11, weight: .medium))
-                    .foregroundColor(statusColor)
+                    .foregroundColor(red)
                     .multilineTextAlignment(.center)
             }
 
@@ -541,25 +528,6 @@ struct EroMeView: View {
         case 1: return "iOS \(osText) sin verificar"
         case 2: return "Tu iOS \(osText) no es compatible"
         default: return "Compatible iOS 26.0 - 27.0 beta"
-        }
-    }
-
-    private var statusText: String {
-        switch engine.phase {
-        case .idle: return "Listo"
-        case .working(let t): return t
-        case .on(let t): return "\(t) · activo"
-        case .off(let t): return "\(t) · apagado, archivos restaurados"
-        case .failed(let t): return t
-        }
-    }
-
-    private var statusColor: Color {
-        switch engine.phase {
-        case .on: return green
-        case .working: return accent
-        case .failed: return red
-        default: return muted
         }
     }
 
@@ -653,17 +621,12 @@ struct EroMeView: View {
 
     private func syncBypass() {
         guard !bypassOn else { return }
-        keyMsg = "Aplicando bypass…"
 
         DispatchQueue.global(qos: .userInitiated).async {
             let problem = EroMeBypass.apply()
             DispatchQueue.main.async {
-                guard problem == nil else {
-                    keyMsg = problem
-                    return
-                }
-                bypassOn = true
-                keyMsg = EroMeBypass.lastNote
+                bypassOn = problem == nil
+                keyMsg = problem
             }
         }
     }
@@ -679,16 +642,11 @@ struct EroMeView: View {
     }
 
     private func openGame() {
-        guard engine.active.contains("holo_armas") else {
-            launch()
-            return
-        }
-        guard !bypassOn else {
+        guard engine.active.contains("holo_armas"), !bypassOn else {
             launch()
             return
         }
         opening = true
-        keyMsg = "Aplicando bypass…"
 
         DispatchQueue.global(qos: .userInitiated).async {
             let problem = EroMeBypass.apply()
@@ -699,7 +657,6 @@ struct EroMeView: View {
                     return
                 }
                 bypassOn = true
-                keyMsg = EroMeBypass.lastNote
                 launch()
             }
         }
@@ -712,7 +669,7 @@ struct EroMeView: View {
                 return
             }
         }
-        if let url = URL(string: "https://apps.apple.com/app/id1300146617") {
+        if let url = URL(string: "https://apps.apple.com/app/id1300166617") {
             UIApplication.shared.open(url)
         }
     }
@@ -720,16 +677,6 @@ struct EroMeView: View {
 
 enum EroMeBypass {
     private static let bundle = "com.dts.freefireth"
-
-    private static let candidates = [
-        "Documents/contentcache/opcional/ios",
-        "Documents/contentcache/optional/ios",
-        "Documents/contentcache/Opcional/ios",
-        "Documents/contentcache/compulsory/ios",
-        "Documents/ios"
-    ]
-
-    private(set) static var lastNote = "Bypass activo"
 
     private static var directory: URL {
         FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
@@ -782,7 +729,6 @@ enum EroMeBypass {
         fields[1] = identifier
         fields[4] = real.hash
         fields[5] = real.size
-        lastNote = "Bypass activo · " + real.size
 
         var lines = text.components(separatedBy: "\n")
         guard let index = lines.firstIndex(where: { $0.hasPrefix("shaders,") }) else {
@@ -815,13 +761,19 @@ enum EroMeBypass {
     }
 
     private static func locate(_ container: String) -> String? {
-        for relative in candidates {
-            let path = (container as NSString).appendingPathComponent(relative) + "/fileinfo"
-            if let text = readText(path), text.contains("shaders,") {
-                return path
-            }
+        let documents = (container as NSString).appendingPathComponent("Documents")
+        let handle = ContainerStore.grantContainerAccess(documents)
+        defer { if handle >= 0 { bad_query_release(handle) } }
+        let found = search("fileinfo", under: documents, depth: 7)
+        let withShaders = found.filter { readText($0)?.contains("shaders,") == true }
+        let ordered = withShaders.sorted { first, second in
+            let a = first.lowercased()
+            let b = second.lowercased()
+            let aOpt = a.contains("opcional") || a.contains("optional")
+            let bOpt = b.contains("opcional") || b.contains("optional")
+            return aOpt && !bOpt
         }
-        return nil
+        return ordered.first
     }
 
     private static func variant(in folder: String) -> String? {
@@ -831,9 +783,9 @@ enum EroMeBypass {
             return lower.hasPrefix("shaders.") && lower != "shaders"
         }
         let ordered = matches.sorted { first, second in
-            let aLevi = first.lowercased().contains("levi")
-            let bLevi = second.lowercased().contains("levi")
-            if aLevi != bLevi { return aLevi }
+            let aEro = first.lowercased().contains("erome")
+            let bEro = second.lowercased().contains("erome")
+            if aEro != bEro { return aEro }
             let a = (folder as NSString).appendingPathComponent(first)
             let b = (folder as NSString).appendingPathComponent(second)
             return stamp(a) > stamp(b)
@@ -848,12 +800,29 @@ enum EroMeBypass {
         defer { if handle >= 0 { bad_query_release(handle) } }
         let found = searchPrefix("shaders.", under: documents, depth: 8)
         let ordered = found.sorted { first, second in
-            let aLevi = first.lowercased().contains("levi")
-            let bLevi = second.lowercased().contains("levi")
-            if aLevi != bLevi { return aLevi }
+            let aEro = first.lowercased().contains("erome")
+            let bEro = second.lowercased().contains("erome")
+            if aEro != bEro { return aEro }
             return stamp(first) > stamp(second)
         }
         return ordered.first
+    }
+
+    private static func search(_ name: String, under root: String, depth: Int) -> [String] {
+        guard depth > 0 else { return [] }
+        let items = (try? FileManager.default.contentsOfDirectory(atPath: root)) ?? []
+        var found: [String] = []
+        for item in items where item.lowercased() == name.lowercased() {
+            found.append((root as NSString).appendingPathComponent(item))
+        }
+        for item in items {
+            let full = (root as NSString).appendingPathComponent(item)
+            var isDirectory: ObjCBool = false
+            guard FileManager.default.fileExists(atPath: full, isDirectory: &isDirectory),
+                  isDirectory.boolValue else { continue }
+            found += search(name, under: full, depth: depth - 1)
+        }
+        return found
     }
 
     private static func searchPrefix(_ prefix: String, under root: String, depth: Int) -> [String] {
