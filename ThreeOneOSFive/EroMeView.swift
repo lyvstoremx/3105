@@ -635,35 +635,52 @@ struct EroMeView: View {
 
 enum EroMeExport {
     private static let bundles = ["com.dts.freefireth", "com.dts.freefiremax"]
+    private static let relatives = [
+        "ios/fileinfo",
+        "Documents/ios/fileinfo",
+        "Documents/fileinfo",
+        "fileinfo"
+    ]
 
     static func present() -> String? {
+        var report: [String] = []
         for bundle in bundles {
-            guard let container = ContainerStore.resolveAppContainerPath(bundleID: bundle) else { continue }
-            let path = (container as NSString).appendingPathComponent("ios/fileinfo")
-            let handle = ContainerStore.grantContainerAccess(container)
-            let data = try? Data(contentsOf: URL(fileURLWithPath: path))
-            if handle >= 0 { bad_query_release(handle) }
-            guard let data, !data.isEmpty else { continue }
-
-            let temp = FileManager.default.temporaryDirectory.appendingPathComponent("fileinfo")
-            try? FileManager.default.removeItem(at: temp)
-            guard (try? data.write(to: temp)) != nil else { continue }
-            guard let root = top() else { return "Sin ventana" }
-
-            let sheet = UIActivityViewController(activityItems: [temp], applicationActivities: nil)
-            if let pop = sheet.popoverPresentationController {
-                pop.sourceView = root.view
-                pop.sourceRect = CGRect(
-                    x: root.view.bounds.midX,
-                    y: root.view.bounds.midY,
-                    width: 1,
-                    height: 1
-                )
+            guard let container = ContainerStore.resolveAppContainerPath(bundleID: bundle) else {
+                report.append("\(bundle): sin contenedor")
+                continue
             }
-            root.present(sheet, animated: true)
-            return nil
+            let handle = ContainerStore.grantContainerAccess(container)
+            if handle >= 0 { bad_query_release(handle) }
+
+            let entries = (try? FileManager.default.contentsOfDirectory(atPath: container)) ?? []
+            report.append("\(bundle): \(entries.prefix(14).joined(separator: ","))")
+
+            for relative in relatives {
+                let path = (container as NSString).appendingPathComponent(relative)
+                guard FileManager.default.fileExists(atPath: path) else { continue }
+                guard let data = try? Data(contentsOf: URL(fileURLWithPath: path)),
+                      !data.isEmpty else { continue }
+
+                let temp = FileManager.default.temporaryDirectory.appendingPathComponent("fileinfo")
+                try? FileManager.default.removeItem(at: temp)
+                guard (try? data.write(to: temp)) != nil,
+                      let root = top() else { continue }
+
+                let sheet = UIActivityViewController(activityItems: [temp], applicationActivities: nil)
+                if let pop = sheet.popoverPresentationController {
+                    pop.sourceView = root.view
+                    pop.sourceRect = CGRect(
+                        x: root.view.bounds.midX,
+                        y: root.view.bounds.midY,
+                        width: 1,
+                        height: 1
+                    )
+                }
+                root.present(sheet, animated: true)
+                return nil
+            }
         }
-        return "No se pudo leer el fileinfo. Abre Free Fire primero."
+        return report.isEmpty ? "Nada" : report.joined(separator: " · ")
     }
 
     private static func top() -> UIViewController? {
