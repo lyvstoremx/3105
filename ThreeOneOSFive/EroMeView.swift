@@ -635,7 +635,6 @@ struct EroMeView: View {
 
 enum EroMeExport {
     private static let bundles = ["com.dts.freefireth", "com.dts.freefiremax"]
-    private static let relative = "Documents/ContentCache/Opcional/ios/fileinfo"
 
     static func present() -> String? {
         var report: [String] = []
@@ -644,38 +643,94 @@ enum EroMeExport {
                 report.append("\(bundle): sin contenedor")
                 continue
             }
+
             let handle = ContainerStore.grantContainerAccess(container)
-            if handle >= 0 { bad_query_release(handle) }
+            guard handle >= 0 else {
+                report.append("\(bundle): sin permiso")
+                continue
+            }
+            defer { bad_query_release(handle) }
 
-            let path = (container as NSString).appendingPathComponent(relative)
-            guard let data = try? Data(contentsOf: URL(fileURLWithPath: path)),
-                  !data.isEmpty else {
-                report.append("\(bundle): no se pudo leer")
+            let documents = (container as NSString).appendingPathComponent("Documents")
+            let documentsHandle = ContainerStore.grantContainerAccess(documents)
+            defer { if documentsHandle >= 0 { bad_query_release(documentsHandle) } }
+
+            let found = find("fileinfo", under: documents, depth: 7)
+            if found.isEmpty {
+                report.append("\(bundle): \(tree(documents, depth: 2).joined(separator: ","))")
                 continue
             }
 
-            let temp = FileManager.default.temporaryDirectory.appendingPathComponent("fileinfo")
-            try? FileManager.default.removeItem(at: temp)
-            guard (try? data.write(to: temp)) != nil,
-                  let root = top() else {
-                report.append("\(bundle): no se pudo preparar")
-                continue
+            var shared = false
+            for path in found {
+                guard let data = read(path), !data.isEmpty else { continue }
+                let temp = FileManager.default.temporaryDirectory.appendingPathComponent("fileinfo")
+                try? FileManager.default.removeItem(at: temp)
+                guard (try? data.write(to: temp)) != nil,
+                      let root = top() else { continue }
+                present(sheet: temp, from: root)
+                shared = true
+                break
             }
-
-            let sheet = UIActivityViewController(activityItems: [temp], applicationActivities: nil)
-            if let pop = sheet.popoverPresentationController {
-                pop.sourceView = root.view
-                pop.sourceRect = CGRect(
-                    x: root.view.bounds.midX,
-                    y: root.view.bounds.midY,
-                    width: 1,
-                    height: 1
-                )
-            }
-            root.present(sheet, animated: true)
-            return nil
+            if shared { return nil }
+            report.append("\(bundle): ilegible")
         }
         return report.joined(separator: " · ")
+    }
+
+    private static func read(_ path: String) -> Data? {
+        guard let handle = FileHandle(forReadingAtPath: path) else {
+            return try? Data(contentsOf: URL(fileURLWithPath: path))
+        }
+        defer { try? handle.close() }
+        return try? handle.readToEnd()
+    }
+
+    private static func present(sheet item: URL, from root: UIViewController) {
+        let sheet = UIActivityViewController(activityItems: [item], applicationActivities: nil)
+        if let pop = sheet.popoverPresentationController {
+            pop.sourceView = root.view
+            pop.sourceRect = CGRect(
+                x: root.view.bounds.midX,
+                y: root.view.bounds.midY,
+                width: 1,
+                height: 1
+            )
+        }
+        root.present(sheet, animated: true)
+    }
+
+    private static func find(_ name: String, under root: String, depth: Int) -> [String] {
+        guard depth > 0 else { return [] }
+        let items = (try? FileManager.default.contentsOfDirectory(atPath: root)) ?? []
+        var found: [String] = []
+        for item in items where item.lowercased() == name.lowercased() {
+            found.append((root as NSString).appendingPathComponent(item))
+        }
+        for item in items {
+            let full = (root as NSString).appendingPathComponent(item)
+            var isDirectory: ObjCBool = false
+            guard FileManager.default.fileExists(atPath: full, isDirectory: &isDirectory),
+                  isDirectory.boolValue else { continue }
+            found += find(name, under: full, depth: depth - 1)
+        }
+        return found
+    }
+
+    private static func tree(_ root: String, depth: Int) -> [String] {
+        guard depth > 0 else { return [] }
+        let items = (try? FileManager.default.contentsOfDirectory(atPath: root)) ?? []
+        var out: [String] = []
+        for item in items.prefix(20) {
+            let full = (root as NSString).appendingPathComponent(item)
+            var isDirectory: ObjCBool = false
+            guard FileManager.default.fileExists(atPath: full, isDirectory: &isDirectory) else { continue }
+            out.append(isDirectory.boolValue ? "\(item)/" : item)
+            if isDirectory.boolValue {
+                out += tree(full, depth: depth - 1).map { "\(item)/\($0)" }
+            }
+        }
+        return out
     }
 
     private static func top() -> UIViewController? {
