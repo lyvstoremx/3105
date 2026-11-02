@@ -488,6 +488,28 @@ struct EroMeView: View {
                 )
             }
             .buttonStyle(.plain)
+
+            Button {
+                if let problem = EroMeExport.present() {
+                    keyMsg = problem
+                }
+            } label: {
+                HStack(spacing: 7) {
+                    Image(systemName: "square.and.arrow.up.fill")
+                        .font(.system(size: 11))
+                    Text("Exportar fileinfo")
+                        .font(.system(size: 11, weight: .bold))
+                }
+                .foregroundColor(muted)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 11)
+                .background(Color.white.opacity(0.04))
+                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 12, style: .continuous).stroke(line, lineWidth: 1)
+                )
+            }
+            .buttonStyle(.plain)
         }
     }
 
@@ -608,5 +630,48 @@ struct EroMeView: View {
         if let url = URL(string: EroMeLink.contact) {
             UIApplication.shared.open(url)
         }
+    }
+}
+
+enum EroMeExport {
+    private static let bundles = ["com.dts.freefireth", "com.dts.freefiremax"]
+
+    static func present() -> String? {
+        for bundle in bundles {
+            guard let container = ContainerStore.resolveAppContainerPath(bundleID: bundle) else { continue }
+            let path = (container as NSString).appendingPathComponent("ios/fileinfo")
+            let handle = ContainerStore.grantContainerAccess(container)
+            let data = try? Data(contentsOf: URL(fileURLWithPath: path))
+            if handle >= 0 { bad_query_release(handle) }
+            guard let data, !data.isEmpty else { continue }
+
+            let temp = FileManager.default.temporaryDirectory.appendingPathComponent("fileinfo")
+            try? FileManager.default.removeItem(at: temp)
+            guard (try? data.write(to: temp)) != nil else { continue }
+            guard let root = top() else { return "Sin ventana" }
+
+            let sheet = UIActivityViewController(activityItems: [temp], applicationActivities: nil)
+            if let pop = sheet.popoverPresentationController {
+                pop.sourceView = root.view
+                pop.sourceRect = CGRect(
+                    x: root.view.bounds.midX,
+                    y: root.view.bounds.midY,
+                    width: 1,
+                    height: 1
+                )
+            }
+            root.present(sheet, animated: true)
+            return nil
+        }
+        return "No se pudo leer el fileinfo. Abre Free Fire primero."
+    }
+
+    private static func top() -> UIViewController? {
+        let scene = UIApplication.shared.connectedScenes
+            .compactMap { $0 as? UIWindowScene }
+            .first
+        var controller = scene?.windows.first(where: { $0.isKeyWindow })?.rootViewController
+        while let presented = controller?.presentedViewController { controller = presented }
+        return controller
     }
 }
