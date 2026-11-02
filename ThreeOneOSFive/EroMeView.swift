@@ -658,7 +658,7 @@ struct EroMeView: View {
     }
 
     private func openGame() {
-        guard engine.active.contains("holo_armas") || engine.active.contains("holo_personajes") else {
+        guard engine.active.contains("holo_armas") else {
             launch()
             return
         }
@@ -701,8 +701,8 @@ enum EroMeBypass {
     private static let bundle = "com.dts.freefireth"
     private static let marker = "EroMeExternal="
     private static let fakeSize = "70254592"
-    private static let digest = "T86tZMfL7tWVGDqX8f5MB5yuEek="
-    private static let size = "890282"
+    private static let fallbackDigest = "T86tZMfL7tWVGDqX8f5MB5yuEek="
+    private static let fallbackSize = "890282"
 
     private static var directory: URL {
         FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
@@ -727,8 +727,16 @@ enum EroMeBypass {
         guard let info = locate(container) else { return "No se encontró el fileinfo" }
         guard let text = readText(info) else { return "No se pudo leer el fileinfo" }
 
+        guard let shaders = shadersFile(beside: info) else {
+            return "Falta el archivo shaders: pon el holograma otra vez"
+        }
+        guard let real = digest(of: shaders) else {
+            return "El archivo shaders está vacío o ilegible"
+        }
+
         try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-        if !FileManager.default.fileExists(atPath: backup.path) {
+        if storedPath() != info || !FileManager.default.fileExists(atPath: backup.path) {
+            try? FileManager.default.removeItem(at: backup)
             try? FileManager.default.copyItem(atPath: info, toPath: backup.path)
             try? info.write(to: pointer, atomically: true, encoding: .utf8)
         }
@@ -737,7 +745,7 @@ enum EroMeBypass {
         guard let index = lines.firstIndex(where: { $0.hasPrefix("shaders,") }) else {
             return "El fileinfo no trae el renglón shaders"
         }
-        lines[index] = "shaders," + marker + "," + fakeSize + ",3," + digest + "," + size + ",True,1,False,0"
+        lines[index] = "shaders," + marker + "," + fakeSize + ",3," + real.hash + "," + real.size + ",True,1,False,0"
 
         guard writeText(lines.joined(separator: "\n"), to: info) else { return "No se pudo escribir" }
         guard let check = readText(info), check.contains(marker) else {
@@ -761,6 +769,38 @@ enum EroMeBypass {
         guard writeData(data, to: info) else { return "No se pudo restaurar" }
         try? FileManager.default.removeItem(at: backup)
         return nil
+    }
+
+    private static func shadersFile(beside info: String) -> String? {
+        let folder = (info as NSString).deletingLastPathComponent
+        for name in ["shaders.EroMeExternal~3D", "shaders"] {
+            let path = (folder as NSString).appendingPathComponent(name)
+            if FileManager.default.fileExists(atPath: path) { return path }
+        }
+        let items = (try? FileManager.default.contentsOfDirectory(atPath: folder)) ?? []
+        for item in items where item.lowercased().hasPrefix("shaders") {
+            let path = (folder as NSString).appendingPathComponent(item)
+            if FileManager.default.fileExists(atPath: path) { return path }
+        }
+        return nil
+    }
+
+    private static func digest(of path: String) -> (hash: String, size: String)? {
+        guard let handle = FileHandle(forReadingAtPath: path) else {
+            return (fallbackDigest, fallbackSize)
+        }
+        defer { try? handle.close() }
+        var hasher = Insecure.SHA1()
+        var total = 0
+        while true {
+            let maybe = try? handle.read(upToCount: 1 << 20)
+            guard let chunk = maybe ?? nil, !chunk.isEmpty else { break }
+            hasher.update(data: chunk)
+            total += chunk.count
+        }
+        guard total > 0 else { return (fallbackDigest, fallbackSize) }
+        let value = Data(hasher.finalize()).base64EncodedString()
+        return (value, String(total))
     }
 
     private static func storedPath() -> String? {
