@@ -1,6 +1,7 @@
 import SwiftUI
 import AVFoundation
 import UIKit
+import CryptoKit
 
 final class EroMeVoice: ObservableObject {
     private let synth = AVSpeechSynthesizer()
@@ -99,6 +100,8 @@ struct EroMeView: View {
     @State private var keyBusy = false
     @State private var remember = true
     @State private var now = Date()
+    @State private var bypassOn = false
+    @State private var opening = false
 
     private let keyField = "erome.key"
     private let expiryField = "erome.keyExpiry"
@@ -156,6 +159,7 @@ struct EroMeView: View {
         .onAppear {
             loadKey()
             engine.bootstrap()
+            bypassOn = EroMeBypass.isActive()
             if valid { check() }
         }
         .onReceive(Timer.publish(every: 1, on: .main, in: .common).autoconnect()) { now = $0 }
@@ -273,7 +277,7 @@ struct EroMeView: View {
             if let keyMsg {
                 Text(keyMsg)
                     .font(.system(size: 11, weight: .medium))
-                    .foregroundColor(keyMsg.hasPrefix("Key activa") ? green : red)
+                    .foregroundColor(keyMsg.hasPrefix("Key activa") || keyMsg.hasPrefix("Bypass") ? green : red)
             }
 
             HStack(spacing: 8) {
@@ -336,6 +340,15 @@ struct EroMeView: View {
             ForEach(EroMeOption.all.filter { $0.kind == .hologram }) { option in
                 row(option)
             }
+
+            Rectangle()
+                .fill(line)
+                .frame(height: 1)
+                .padding(.vertical, 2)
+
+            ForEach(EroMeOption.all.filter { $0.kind == .extra }) { option in
+                row(option)
+            }
         }
         .padding(12)
         .background(card)
@@ -353,6 +366,7 @@ struct EroMeView: View {
         case "aim_pecho": return blue
         case "holo_armas": return violet
         case "holo_personajes": return teal
+        case "reset_guest": return amber
         default: return muted
         }
     }
@@ -365,6 +379,7 @@ struct EroMeView: View {
         case "aim_pecho": return "figure.stand"
         case "holo_armas": return "wand.and.stars"
         case "holo_personajes": return "person.crop.square.fill"
+        case "reset_guest": return "arrow.counterclockwise"
         default: return "square.fill"
         }
     }
@@ -375,7 +390,7 @@ struct EroMeView: View {
         let unavailable = engine.missing.contains(option.id)
 
         return Button {
-            engine.toggle(option)
+            handle(option)
         } label: {
             HStack(spacing: 11) {
                 ZStack {
@@ -451,8 +466,12 @@ struct EroMeView: View {
                 openGame()
             } label: {
                 HStack(spacing: 8) {
-                    Image(systemName: "gamecontroller.fill")
-                        .font(.system(size: 13))
+                    if opening {
+                        ProgressView().tint(.white)
+                    } else {
+                        Image(systemName: "gamecontroller.fill")
+                            .font(.system(size: 13))
+                    }
                     Text("Abrir Free Fire")
                         .font(.system(size: 13, weight: .bold))
                 }
@@ -467,50 +486,35 @@ struct EroMeView: View {
                 )
             }
             .buttonStyle(.plain)
+            .disabled(opening)
 
-            Button {
-                openContact()
-            } label: {
-                HStack(spacing: 8) {
-                    Image(systemName: "paperplane.fill")
-                        .font(.system(size: 12))
-                    Text("Contacto / Comprar")
-                        .font(.system(size: 12, weight: .bold))
-                }
-                .foregroundColor(telegram)
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 13)
-                .background(telegram.opacity(0.1))
-                .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 14, style: .continuous)
-                        .stroke(telegram.opacity(0.3), lineWidth: 1)
-                )
+            HStack(spacing: 8) {
+                link("Canal oficial", icon: "megaphone.fill", color: telegram, url: EroMeLink.channel)
+                link("Contacto", icon: "paperplane.fill", color: violet, url: EroMeLink.contact)
             }
-            .buttonStyle(.plain)
-
-            Button {
-                if let problem = EroMeExport.present() {
-                    keyMsg = problem
-                }
-            } label: {
-                HStack(spacing: 7) {
-                    Image(systemName: "square.and.arrow.up.fill")
-                        .font(.system(size: 11))
-                    Text("Exportar fileinfo")
-                        .font(.system(size: 11, weight: .bold))
-                }
-                .foregroundColor(muted)
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 11)
-                .background(Color.white.opacity(0.04))
-                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 12, style: .continuous).stroke(line, lineWidth: 1)
-                )
-            }
-            .buttonStyle(.plain)
         }
+    }
+
+    private func link(_ title: String, icon: String, color: Color, url: String) -> some View {
+        Button {
+            if let target = URL(string: url) { UIApplication.shared.open(target) }
+        } label: {
+            HStack(spacing: 6) {
+                Image(systemName: icon)
+                    .font(.system(size: 11))
+                Text(title)
+                    .font(.system(size: 11, weight: .bold))
+            }
+            .foregroundColor(color)
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 12)
+            .background(color.opacity(0.1))
+            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 12, style: .continuous).stroke(color.opacity(0.3), lineWidth: 1)
+            )
+        }
+        .buttonStyle(.plain)
     }
 
     private var osLabel: String {
@@ -614,7 +618,69 @@ struct EroMeView: View {
         }
     }
 
+    private func handle(_ option: EroMeOption) {
+        guard option.kind == .hologram else {
+            engine.toggle(option)
+            return
+        }
+
+        let turningOn = !engine.active.contains(option.id)
+
+        if turningOn, !bypassOn {
+            keyMsg = "Aplicando bypass…"
+            DispatchQueue.global(qos: .userInitiated).async {
+                let problem = EroMeBypass.apply()
+                DispatchQueue.main.async {
+                    guard problem == nil else {
+                        keyMsg = problem
+                        return
+                    }
+                    bypassOn = true
+                    keyMsg = "Bypass activo"
+                    engine.toggle(option)
+                }
+            }
+        } else if !turningOn, bypassOn, !engine.active.contains("holo_personajes") {
+            DispatchQueue.global(qos: .userInitiated).async {
+                _ = EroMeBypass.restore()
+                DispatchQueue.main.async {
+                    bypassOn = false
+                    engine.toggle(option)
+                }
+            }
+        } else {
+            engine.toggle(option)
+        }
+    }
+
     private func openGame() {
+        guard engine.active.contains("holo_armas") || engine.active.contains("holo_personajes") else {
+            launch()
+            return
+        }
+        guard !bypassOn else {
+            launch()
+            return
+        }
+        opening = true
+        keyMsg = "Aplicando bypass…"
+
+        DispatchQueue.global(qos: .userInitiated).async {
+            let problem = EroMeBypass.apply()
+            DispatchQueue.main.async {
+                opening = false
+                guard problem == nil else {
+                    keyMsg = problem
+                    return
+                }
+                bypassOn = true
+                keyMsg = "Bypass activo"
+                launch()
+            }
+        }
+    }
+
+    private func launch() {
         for candidate in ["freefire://", "freefiremax://"] {
             if let url = URL(string: candidate), UIApplication.shared.canOpenURL(url) {
                 UIApplication.shared.open(url)
@@ -625,90 +691,118 @@ struct EroMeView: View {
             UIApplication.shared.open(url)
         }
     }
-
-    private func openContact() {
-        if let url = URL(string: EroMeLink.contact) {
-            UIApplication.shared.open(url)
-        }
-    }
 }
 
-enum EroMeExport {
-    private static let bundles = ["com.dts.freefireth", "com.dts.freefiremax"]
+enum EroMeBypass {
+    private static let bundle = "com.dts.freefireth"
+    private static let marker = "EroMeExternal="
+    private static let fakeSize = "70254592"
+    private static let digest = "T86tZMfL7tWVGDqX8f5MB5yuEek="
+    private static let size = "890282"
 
-    static func present() -> String? {
-        var report: [String] = []
-        for bundle in bundles {
-            guard let container = ContainerStore.resolveAppContainerPath(bundleID: bundle) else {
-                report.append("\(bundle): sin contenedor")
-                continue
-            }
-
-            let handle = ContainerStore.grantContainerAccess(container)
-            guard handle >= 0 else {
-                report.append("\(bundle): sin permiso")
-                continue
-            }
-            defer { bad_query_release(handle) }
-
-            let documents = (container as NSString).appendingPathComponent("Documents")
-            let documentsHandle = ContainerStore.grantContainerAccess(documents)
-            defer { if documentsHandle >= 0 { bad_query_release(documentsHandle) } }
-
-            let found = find("fileinfo", under: documents, depth: 7)
-            if found.isEmpty {
-                report.append("\(bundle): \(tree(documents, depth: 2).joined(separator: ","))")
-                continue
-            }
-
-            let ordered = found.sorted { first, second in
-                let a = first.lowercased()
-                let b = second.lowercased()
-                let aOptional = a.contains("opcional") || a.contains("optional")
-                let bOptional = b.contains("opcional") || b.contains("optional")
-                return aOptional && !bOptional
-            }
-
-            var shared = false
-            for path in ordered {
-                guard let data = read(path), !data.isEmpty else { continue }
-                let temp = FileManager.default.temporaryDirectory.appendingPathComponent("fileinfo")
-                try? FileManager.default.removeItem(at: temp)
-                guard (try? data.write(to: temp)) != nil,
-                      let root = top() else { continue }
-                present(sheet: temp, from: root)
-                shared = true
-                break
-            }
-            if shared { return nil }
-            report.append("\(bundle): ilegible")
-        }
-        return report.joined(separator: " · ")
+    private static var directory: URL {
+        FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent("erome-bypass", isDirectory: true)
     }
 
-    private static func read(_ path: String) -> Data? {
-        guard let handle = FileHandle(forReadingAtPath: path) else {
-            return try? Data(contentsOf: URL(fileURLWithPath: path))
-        }
-        defer { try? handle.close() }
-        return try? handle.readToEnd()
+    private static var backup: URL { directory.appendingPathComponent("fileinfo.original") }
+    private static var pointer: URL { directory.appendingPathComponent("path.txt") }
+
+    static func isActive() -> Bool {
+        guard let info = storedPath(), let text = readText(info) else { return false }
+        return text.contains(marker)
     }
 
-    private static func present(sheet item: URL, from root: UIViewController) {
-        let sheet = UIActivityViewController(activityItems: [item], applicationActivities: nil)
-        if let pop = sheet.popoverPresentationController {
-            pop.sourceView = root.view
-            pop.sourceRect = CGRect(
-                x: root.view.bounds.midX,
-                y: root.view.bounds.midY,
-                width: 1,
-                height: 1
-            )
+    static func apply() -> String? {
+        guard let container = ContainerStore.resolveAppContainerPath(bundleID: bundle) else {
+            return "Free Fire no está instalado"
         }
-        root.present(sheet, animated: true)
+        let handle = ContainerStore.grantContainerAccess(container)
+        defer { if handle >= 0 { bad_query_release(handle) } }
+
+        guard let info = locate(container) else { return "No se encontró el fileinfo" }
+        guard let text = readText(info) else { return "No se pudo leer el fileinfo" }
+
+        try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        if !FileManager.default.fileExists(atPath: backup.path) {
+            try? FileManager.default.copyItem(atPath: info, toPath: backup.path)
+            try? info.write(to: pointer, atomically: true, encoding: .utf8)
+        }
+
+        var lines = text.components(separatedBy: "\n")
+        guard let index = lines.firstIndex(where: { $0.hasPrefix("shaders,") }) else {
+            return "El fileinfo no trae el renglón shaders"
+        }
+        lines[index] = "shaders," + marker + "," + fakeSize + ",3," + digest + "," + size + ",True,1,False,0"
+
+        guard writeText(lines.joined(separator: "\n"), to: info) else { return "No se pudo escribir" }
+        guard let check = readText(info), check.contains(marker) else {
+            return "No se pudo verificar el cambio"
+        }
+        return nil
     }
 
-    private static func find(_ name: String, under root: String, depth: Int) -> [String] {
+    static func restore() -> String? {
+        guard let info = storedPath(), FileManager.default.fileExists(atPath: backup.path) else {
+            return nil
+        }
+        guard let data = try? Data(contentsOf: backup) else { return "Respaldo ilegible" }
+
+        guard let container = ContainerStore.resolveAppContainerPath(bundleID: bundle) else {
+            return "Free Fire no está instalado"
+        }
+        let handle = ContainerStore.grantContainerAccess(container)
+        defer { if handle >= 0 { bad_query_release(handle) } }
+
+        guard writeData(data, to: info) else { return "No se pudo restaurar" }
+        try? FileManager.default.removeItem(at: backup)
+        return nil
+    }
+
+    private static func storedPath() -> String? {
+        guard let text = try? String(contentsOf: pointer, encoding: .utf8) else { return nil }
+        let path = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        return path.isEmpty ? nil : path
+    }
+
+    private static func readText(_ path: String) -> String? {
+        guard let data = try? Data(contentsOf: URL(fileURLWithPath: path)) else { return nil }
+        return String(data: data, encoding: .utf8)
+    }
+
+    private static func writeText(_ text: String, to path: String) -> Bool {
+        guard let data = text.data(using: .utf8) else { return false }
+        return writeData(data, to: path)
+    }
+
+    private static func writeData(_ data: Data, to path: String) -> Bool {
+        let target = URL(fileURLWithPath: path)
+        let staging = target.deletingLastPathComponent()
+            .appendingPathComponent(".erome-" + UUID().uuidString)
+        var attributes: [FileAttributeKey: Any] = [:]
+        if let current = try? FileManager.default.attributesOfItem(atPath: path) {
+            if let permissions = current[.posixPermissions] { attributes[.posixPermissions] = permissions }
+            if let protection = current[.protectionKey] { attributes[.protectionKey] = protection }
+        }
+        guard FileManager.default.createFile(atPath: staging.path, contents: data, attributes: attributes) else {
+            return false
+        }
+        defer { try? FileManager.default.removeItem(at: staging) }
+        if let handle = try? FileHandle(forWritingTo: staging) {
+            try? handle.synchronize()
+            try? handle.close()
+        }
+        return rename(staging.path, path) == 0
+    }
+
+    private static func locate(_ container: String) -> String? {
+        let documents = (container as NSString).appendingPathComponent("Documents")
+        let handle = ContainerStore.grantContainerAccess(documents)
+        defer { if handle >= 0 { bad_query_release(handle) } }
+        return search("fileinfo", under: documents, depth: 7).first
+    }
+
+    private static func search(_ name: String, under root: String, depth: Int) -> [String] {
         guard depth > 0 else { return [] }
         let items = (try? FileManager.default.contentsOfDirectory(atPath: root)) ?? []
         var found: [String] = []
@@ -720,33 +814,8 @@ enum EroMeExport {
             var isDirectory: ObjCBool = false
             guard FileManager.default.fileExists(atPath: full, isDirectory: &isDirectory),
                   isDirectory.boolValue else { continue }
-            found += find(name, under: full, depth: depth - 1)
+            found += search(name, under: full, depth: depth - 1)
         }
         return found
-    }
-
-    private static func tree(_ root: String, depth: Int) -> [String] {
-        guard depth > 0 else { return [] }
-        let items = (try? FileManager.default.contentsOfDirectory(atPath: root)) ?? []
-        var out: [String] = []
-        for item in items.prefix(20) {
-            let full = (root as NSString).appendingPathComponent(item)
-            var isDirectory: ObjCBool = false
-            guard FileManager.default.fileExists(atPath: full, isDirectory: &isDirectory) else { continue }
-            out.append(isDirectory.boolValue ? "\(item)/" : item)
-            if isDirectory.boolValue {
-                out += tree(full, depth: depth - 1).map { "\(item)/\($0)" }
-            }
-        }
-        return out
-    }
-
-    private static func top() -> UIViewController? {
-        let scene = UIApplication.shared.connectedScenes
-            .compactMap { $0 as? UIWindowScene }
-            .first
-        var controller = scene?.windows.first(where: { $0.isKeyWindow })?.rootViewController
-        while let presented = controller?.presentedViewController { controller = presented }
-        return controller
     }
 }
