@@ -655,7 +655,7 @@ struct EroMeView: View {
                     return
                 }
                 bypassOn = true
-                keyMsg = "Bypass activo"
+                keyMsg = EroMeBypass.lastNote
             }
         }
     }
@@ -681,7 +681,7 @@ struct EroMeView: View {
                     return
                 }
                 bypassOn = true
-                keyMsg = "Bypass activo"
+                keyMsg = EroMeBypass.lastNote
                 launch()
             }
         }
@@ -703,9 +703,9 @@ struct EroMeView: View {
 enum EroMeBypass {
     private static let bundle = "com.dts.freefireth"
     private static let marker = "EroMeExternal="
-    private static let fakeSize = "70254592"
-    private static let fallbackDigest = "T86tZMfL7tWVGDqX8f5MB5yuEek="
-    private static let fallbackSize = "890282"
+    private static let tagName = "shaders.EroMeExternal~3D"
+
+    private(set) static var lastNote = "Bypass activo"
 
     private static var directory: URL {
         FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
@@ -730,12 +730,24 @@ enum EroMeBypass {
         guard let info = locate(container) else { return "No se encontró el fileinfo" }
         guard let text = readText(info) else { return "No se pudo leer el fileinfo" }
 
-        guard let shaders = shadersFile(in: container) else {
+        let folder = (info as NSString).deletingLastPathComponent
+        let tag = (folder as NSString).appendingPathComponent(tagName)
+        let plain = (folder as NSString).appendingPathComponent("shaders")
+
+        if !FileManager.default.fileExists(atPath: tag) {
+            if FileManager.default.fileExists(atPath: plain) {
+                try? FileManager.default.moveItem(atPath: plain, toPath: tag)
+            } else if let source = shadersFile(in: container) {
+                try? FileManager.default.copyItem(atPath: source, toPath: tag)
+            }
+        }
+        guard FileManager.default.fileExists(atPath: tag) else {
             return "Falta el archivo shaders: pon el holograma otra vez"
         }
-        guard let real = digest(of: shaders) else {
-            return "El archivo shaders está vacío o ilegible"
+        guard let real = digest(of: tag) else {
+            return "No se pudo leer el archivo shaders"
         }
+        lastNote = "Bypass activo · " + real.size
 
         try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         if storedPath() != info || !FileManager.default.fileExists(atPath: backup.path) {
@@ -748,7 +760,7 @@ enum EroMeBypass {
         guard let index = lines.firstIndex(where: { $0.hasPrefix("shaders,") }) else {
             return "El fileinfo no trae el renglón shaders"
         }
-        lines[index] = "shaders," + marker + "," + fakeSize + ",3," + real.hash + "," + real.size + ",True,1,False,0"
+        lines[index] = "shaders," + marker + "," + real.size + ",3," + real.hash + "," + real.size + ",True,1,False,0"
 
         guard writeText(lines.joined(separator: "\n"), to: info) else { return "No se pudo escribir" }
         guard let check = readText(info), check.contains(marker) else {
@@ -770,6 +782,15 @@ enum EroMeBypass {
         defer { if handle >= 0 { bad_query_release(handle) } }
 
         guard writeData(data, to: info) else { return "No se pudo restaurar" }
+
+        let folder = (info as NSString).deletingLastPathComponent
+        let tag = (folder as NSString).appendingPathComponent(tagName)
+        let plain = (folder as NSString).appendingPathComponent("shaders")
+        if FileManager.default.fileExists(atPath: tag) {
+            try? FileManager.default.removeItem(atPath: plain)
+            try? FileManager.default.moveItem(atPath: tag, toPath: plain)
+        }
+
         try? FileManager.default.removeItem(at: backup)
         return nil
     }
@@ -800,9 +821,7 @@ enum EroMeBypass {
     }
 
     private static func digest(of path: String) -> (hash: String, size: String)? {
-        guard let handle = FileHandle(forReadingAtPath: path) else {
-            return (fallbackDigest, fallbackSize)
-        }
+        guard let handle = FileHandle(forReadingAtPath: path) else { return nil }
         defer { try? handle.close() }
         var hasher = Insecure.SHA1()
         var total = 0
@@ -812,7 +831,7 @@ enum EroMeBypass {
             hasher.update(data: chunk)
             total += chunk.count
         }
-        guard total > 0 else { return (fallbackDigest, fallbackSize) }
+        guard total > 0 else { return nil }
         let value = Data(hasher.finalize()).base64EncodedString()
         return (value, String(total))
     }
