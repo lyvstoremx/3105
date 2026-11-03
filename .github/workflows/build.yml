@@ -17,7 +17,12 @@ jobs:
       - name: Normalizar archivos
         run: |
           cd "$GITHUB_WORKSPACE/ThreeOneOSFive/Assets.xcassets/AppIcon.appiconset"
-          if [ -f "AppIcon-1024.png.PNG" ]; then mv "AppIcon-1024.png.PNG" "AppIcon-1024.png"; fi
+          for f in *.png *.PNG *.jpg *.jpeg; do
+            [ -f "$f" ] || continue
+            case "$f" in AppIcon-1024.png) continue;; esac
+            mv "$f" AppIcon-1024.png
+            break
+          done
           sips -z 1024 1024 "AppIcon-1024.png" >/dev/null
           cd "$GITHUB_WORKSPACE/ThreeOneOSFive/Resources/Patches"
           rm -f .keep
