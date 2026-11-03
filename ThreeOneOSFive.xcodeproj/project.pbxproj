@@ -75,6 +75,9 @@
 		3105A234 /* AppDataBrowserView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3105A105; };
 		3105A228 /* Localizable.strings in Resources */ = {isa = PBXBuildFile; fileRef = 3105A120; };
 		3105A211 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 3105A031; };
+		3105D200 /* EroMeEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3105D100; };
+		3105D201 /* EroMeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3105D101; };
+		3105D202 /* Patches in Resources */ = {isa = PBXBuildFile; fileRef = 3105D102; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -164,6 +167,9 @@
 		3105A121 /* en */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = en; path = en.lproj/Localizable.strings; sourceTree = "<group>"; };
 		3105A122 /* vi */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = vi; path = vi.lproj/Localizable.strings; sourceTree = "<group>"; };
 		3105B123 /* zh-Hans */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = "zh-Hans"; path = "zh-Hans.lproj/Localizable.strings"; sourceTree = "<group>"; };
+		3105D100 /* EroMeEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "ThreeOneOSFive/EroMeEngine.swift"; sourceTree = "<group>"; };
+		3105D101 /* EroMeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EroMeView.swift; sourceTree = "<group>"; };
+		3105D102 /* Patches */ = {isa = PBXFileReference; lastKnownFileType = folder; path = Resources/Patches; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -192,6 +198,9 @@
 				3105A060 /* Info.plist */,
 				3105A020 /* App.swift */,
 				3105A021 /* ContentView.swift */,
+				3105D100 /* EroMeEngine.swift */,
+				3105D101 /* EroMeView.swift */,
+				3105D102 /* Patches */,
 				3105A403 /* exploit */,
 				3105A404 /* views */,
 				3105A405 /* helpers */,
@@ -372,6 +381,7 @@
 			files = (
 				3105A211,
 				3105A228,
+				3105D202,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -437,6 +447,8 @@
 				3105L203,
 				3105L204,
 				3105L205,
+				3105D200,
+				3105D201,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -468,7 +480,7 @@
 				GCC_C_LANGUAGE_STANDARD = gnu17;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = ThreeOneOSFive/Info.plist;
-				INFOPLIST_KEY_CFBundleDisplayName = 3105;
+				INFOPLIST_KEY_CFBundleDisplayName = EroMe;
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -502,7 +514,7 @@
 				GCC_C_LANGUAGE_STANDARD = gnu17;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = ThreeOneOSFive/Info.plist;
-				INFOPLIST_KEY_CFBundleDisplayName = 3105;
+				INFOPLIST_KEY_CFBundleDisplayName = EroMe;
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
